@@ -15,6 +15,12 @@ import os
 import sys
 from xml.sax.saxutils import escape
 
+
+
+def esc(v):
+    return escape(v, {'"': "&quot;"})
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "pairadice_erd.drawio")
 
@@ -31,6 +37,16 @@ DOMAINS = {
 }
 REL_FILL, REL_STROKE = "#fff2cc", "#d6b656"
 ATTR_FILL, ATTR_STROKE = "#f5f5f5", "#666666"
+TYPE_COLOR = {"1:1": "#2e8b57", "1:N": "#1a5fb4", "M:N": "#c01c28"}
+
+
+def rel_type(r):
+    cards = [p[1] for p in r["parts"]]
+    if "1" not in cards:
+        return "M:N"
+    if all(c == "1" for c in cards):
+        return "1:1"
+    return "1:N"
 
 # --------------------------------------------------------------- entities
 ENTITIES = {}
@@ -310,8 +326,8 @@ PAGES = [
         sub="Block, report, sanction. Every sensitive change is written to the audit log by triggers.",
         ents=[("USER", 1, 1, ["*user_id", "username"]), ("REPORT", 2, 1, None),
               ("LFG_SESSION", 2, 0, ["*session_id", "title"]),
-              ("MESSAGE", 3, 1, ["*message_id"]), ("SANCTION", 2, 2, None),
-              ("AUDIT_LOG", 0, 2, None)],
+              ("MESSAGE", 3, 1, ["*message_id"]), ("SANCTION", 2, 3, None),
+              ("AUDIT_LOG", 0, 3, None)],
         rels=["FILES", "TARGETS", "HANDLES", "ABOUT_SESSION", "ABOUT_MESSAGE",
               "RESULTS_IN", "RECEIVES_SANCTION", "ISSUES", "LOGS",
               ("BLOCKS", {"off": (-330, -220)})],
@@ -341,6 +357,7 @@ class Edge:
     def __init__(self, eid, a, b, label, style, points=(), lpos=-0.5):
         self.id, self.a, self.b, self.label, self.style = eid, a, b, label, style
         self.points, self.lpos = list(points), lpos
+        self.children = []  # (html value, style, x along edge)
 
 
 class Page:
@@ -405,7 +422,7 @@ def ent_size(name):
 
 
 def rel_size(name):
-    return max(140, min(250, 10 * len(name) + 50)), 84
+    return max(140, min(250, 10 * len(name) + 50)), 100
 
 
 def add_entity(pg, name, cx, cy, ghost):
@@ -456,16 +473,19 @@ def rel_centres(rel_items, ents, default_off):
 
 def rel_edges(pg, rname, s, ents, fs, lpos):
     r = RELS[rname]
+    col = TYPE_COLOR[rel_type(r)]
     seen = {}
     for en, card, total, role in r["parts"]:
         e = ents[en]
         seen[en] = seen.get(en, 0) + 1
-        label = card + (f"  ({role})" if role else "")
-        st = (f"endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize={fs};fontStyle=1;"
+        label = f"<b>{card}</b>"
+        if role:
+            label += f'<br><i style="font-size:10px;color:#555555">({role})</i>'
+        st = (f"endArrow=none;html=1;rounded=0;strokeColor={col};fontSize=17;fontColor={col};"
               "labelBackgroundColor=#ffffff;")
         if r["ext"]:
             st += "dashed=1;"
-        st += "shape=link;width=5;" if total else "strokeWidth=1.5;"
+        st += "shape=link;width=5;" if total else "strokeWidth=2;"
         pts = []
         if sum(1 for p in r["parts"] if p[0] == en) > 1:  # two lines to same entity: bend apart
             mx, my = (e.cx + s.cx) / 2, (e.cy + s.cy) / 2
@@ -474,7 +494,13 @@ def rel_edges(pg, rname, s, ents, fs, lpos):
             sign = 1 if seen[en] == 1 else -1
             pts = [(mx + px * 90 * sign, my + py * 90 * sign)]
             st += "curved=1;"
-        pg.edge(e, s, label, st, pts, lpos=lpos)
+        pg.edge(e, s, label, st, pts, lpos=-0.6)
+
+
+def rel_label(rname, size=11):
+    t = rel_type(RELS[rname])
+    return (f'{rname}<br><span style="font-size:{size}px;color:{TYPE_COLOR[t]}">'
+            f'<b>{t.replace(":", " : ")}</b></span>')
 
 
 def build_detail(spec, idx):
@@ -497,7 +523,7 @@ def build_detail(spec, idx):
               "fontSize=12;fontStyle=1;")
         if r["ext"]:
             st += "dashed=1;"
-        s = pg.add("rel", cx, cy, w, h, rname, st, z=3)
+        s = pg.add("rel", cx, cy, w, h, rel_label(rname, 13), st, z=3)
         if r["ident"]:
             s.inner = (w - 18, h - 12)
         rel_shapes[rname] = s
@@ -551,18 +577,29 @@ def build_overview(spec, idx):
         rname, ov = (rn, {}) if isinstance(rn, str) else rn
         r = RELS[rname]
         a_name, b_name = r["parts"][0][0], r["parts"][1][0]
-        cards = f'{r["parts"][0][1]} : {r["parts"][1][1]}'
-        st = ("endArrow=none;html=1;rounded=0;strokeColor=#7a7a7a;strokeWidth=1.5;fontSize=11;"
+        t = rel_type(r)
+        col = TYPE_COLOR[t]
+        title = rname.lower().replace("_", " ")
+        st = (f"endArrow=none;html=1;rounded=0;strokeColor={col};strokeWidth=2;fontSize=11;"
               "fontStyle=1;labelBackgroundColor=#ffffff;")
         if r["ext"]:
             st += "dashed=1;"
-        pts = []
+        pts, kids = [], []
+        label = f'{title}<br><span style="color:{col}">{t.replace(":", " : ")}</span>'
         if a_name == b_name:
             e = ents[a_name]
             dx, dy = ov.get("off", (0, -170))
             pts = [(e.cx + dx - 80, e.cy + dy), (e.cx + dx + 80, e.cy + dy)]
             st += "curved=1;"
-        pg.edge(ents[a_name], ents[b_name], f"{rname.lower().replace('_', ' ')}  ({cards})", st, pts, lpos=0)
+        else:
+            a, b = ents[a_name], ents[b_name]
+            L = math.hypot(a.cx - b.cx, a.cy - b.cy)
+            x = max(0.45, min(0.88, 1 - 190 / max(L, 1)))
+            ks = ("edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];"
+                  f"fontSize=17;fontStyle=1;fontColor={col};labelBackgroundColor=#ffffff;")
+            kids = [(f"<b>{r['parts'][0][1]}</b>", ks, -x), (f"<b>{r['parts'][1][1]}</b>", ks, x)]
+        e2 = pg.edge(ents[a_name], ents[b_name], label, st, pts, lpos=0)
+        e2.children = kids
     return pg
 
 
@@ -605,8 +642,8 @@ def add_legend(pg, x, y):
         pg.add("text", bx + 190, by, 250, 30, text,
                "text;html=1;fontSize=12;align=left;verticalAlign=middle;", z=4)
     pg.add("text", x + 350, y + 345, 640, 40,
-           "1 / N / M = how many on each side.  Thick double line = every instance must take part "
-           "(total participation).  Single line = optional.",
+           "<b style=\"color:#2e8b57\">1 : 1</b> one-to-one &nbsp;&nbsp; <b style=\"color:#1a5fb4\">1 : N</b> one-to-many &nbsp;&nbsp; <b style=\"color:#c01c28\">M : N</b> many-to-many.<br>Number at a line end = how many of that entity per relationship.  "
+           "Double line = every instance must take part (total participation).",
            "text;html=1;fontSize=11;align=left;whiteSpace=wrap;", z=4)
 
 
@@ -628,15 +665,15 @@ def page_xml(pg):
         add_legend(pg, x0, y1 + 60)
     else:
         pg.add("text", x0 + 850, y1 + 40, 1700, 30,
-               "Dashed box / line = stored outside the SQL database (MongoDB).  Double border = weak entity.  "
-               "M : N = many-to-many (becomes a junction table).",
+               "<b style=\"color:#2e8b57\">1 : 1</b> one-to-one &nbsp;&nbsp; <b style=\"color:#1a5fb4\">1 : N</b> one-to-many &nbsp;&nbsp; <b style=\"color:#c01c28\">M : N</b> many-to-many.&nbsp;&nbsp; Numbers at each line end say how many of that entity take part.  "
+               "Dashed = MongoDB.  Double border = weak entity.",
                "text;html=1;fontSize=13;align=left;fontColor=#555555;", z=4)
     x0, y0, x1, y1 = bounds(pg)
     dx, dy = 60 - x0, 60 - y0
     out = []
     for s in sorted(pg.shapes, key=lambda s: s.z):
         x, y = s.cx - s.w / 2 + dx, s.cy - s.h / 2 + dy
-        out.append(f'<mxCell id="{s.id}" value="{escape(s.label)}" style="{s.style}" vertex="1" parent="1">'
+        out.append(f'<mxCell id="{s.id}" value="{esc(s.label)}" style="{s.style}" vertex="1" parent="1">'
                    f'<mxGeometry x="{x:.1f}" y="{y:.1f}" width="{s.w:.1f}" height="{s.h:.1f}" as="geometry"/></mxCell>')
         if s.inner:
             iw, ih = s.inner
@@ -651,11 +688,15 @@ def page_xml(pg):
         if e.points:
             pts = '<Array as="points">' + "".join(
                 f'<mxPoint x="{px + dx:.1f}" y="{py + dy:.1f}"/>' for px, py in e.points) + "</Array>"
-        out.append(f'<mxCell id="{e.id}" value="{escape(e.label)}" style="{e.style}" edge="1" parent="1" '
+        out.append(f'<mxCell id="{e.id}" value="{esc(e.label)}" style="{e.style}" edge="1" parent="1" '
                    f'source="{e.a.id}" target="{e.b.id}"><mxGeometry x="{e.lpos}" relative="1" as="geometry">'
                    f'{pts}</mxGeometry></mxCell>')
+        for i, (val, kst, kx) in enumerate(e.children):
+            out.append(f'<mxCell id="{e.id}c{i}" value="{esc(val)}" style="{kst}" vertex="1" '
+                       f'connectable="0" parent="{e.id}"><mxGeometry x="{kx:.2f}" relative="1" as="geometry">'
+                       f'<mxPoint as="offset"/></mxGeometry></mxCell>')
     w, h = x1 - x0 + 120, y1 - y0 + 120
-    return (f'<diagram name="{escape(pg.spec["name"])}" id="pairadice-{pg.idx}">'
+    return (f'<diagram name="{esc(pg.spec["name"])}" id="pairadice-{pg.idx}">'
             f'<mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" '
             f'arrows="1" fold="1" page="0" pageScale="1" pageWidth="{int(w)}" pageHeight="{int(h)}" '
             f'math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
