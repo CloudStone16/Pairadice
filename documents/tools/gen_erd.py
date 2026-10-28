@@ -12,6 +12,7 @@ they are listed in documents/ER_DESIGN.md.
 """
 import math
 import os
+import re
 import sys
 from xml.sax.saxutils import escape
 
@@ -23,6 +24,7 @@ def esc(v):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "pairadice_erd.drawio")
+SCHEMA_SQL = os.path.join(HERE, "..", "..", "database", "01_schema.sql")   # source for page 9
 
 # ---------------------------------------------------------------- domains
 DOMAINS = {
@@ -340,7 +342,30 @@ PAGES = [
               ("LFG_SESSION", 0, 1, ["*session_id"]), ("SESSION_EMBEDDING", 1, 1, None)],
         rels=["HAS_PLAYER_EMBEDDING", "HAS_SESSION_EMBEDDING"],
     ),
+    dict(
+        key="relational", name="9 Relational Schema", kind="relational", legend=False,
+        title="9 - Relational Schema (MySQL tables)",
+        sub="44 tables, read straight from database/01_schema.sql. PK = primary key (underlined), FK = foreign key (-> referenced table).",
+        note="Crow's-foot lines = foreign keys inside an area: the many end sits on the child table, the bar end on the parent "
+             "(a circle means the FK column is optional). FKs that point to another area are shown only as '-> table' in the column list.",
+    ),
 ]
+
+# table -> area, for the relational page
+TABLE_DOMAIN = {
+    "language": "locale", "geo_region": "locale", "country": "locale",
+    "users": "identity", "auth_account": "identity", "auth_token": "identity", "role": "identity",
+    "permission": "identity", "role_permission": "identity", "user_role": "identity", "user_language": "identity",
+    "game": "games", "genre": "games", "game_genre": "games", "platform": "games", "game_platform": "games",
+    "game_mode": "games", "rank_tier": "games", "game_role": "games", "game_server": "games",
+    "tag": "profile", "user_tag": "profile", "platform_account": "profile", "player_game_profile": "profile",
+    "profile_mode": "profile", "profile_role": "profile", "availability": "profile",
+    "lfg_session": "sessions", "session_language": "sessions", "session_tag": "sessions", "session_slot": "sessions",
+    "session_participant": "sessions", "match_recommendation": "sessions",
+    "team": "social", "team_member": "social", "friendship": "social", "message": "social", "review": "social",
+    "badge": "social", "user_badge": "social",
+    "user_block": "moderation", "report": "moderation", "sanction": "moderation", "audit_log": "moderation",
+}
 
 # ----------------------------------------------------------------- model
 
@@ -603,6 +628,97 @@ def build_overview(spec, idx):
     return pg
 
 
+COL_RE = re.compile(r"^(\w+)\s+(BIGINT|INT|TINYINT|SMALLINT|CHAR|VARCHAR|TEXT|DATETIME|DECIMAL|BOOLEAN|ENUM|JSON|TIME|BINARY)\b")
+
+
+def parse_schema(path=SCHEMA_SQL):
+    """Tables -> columns, primary key, nullable columns and foreign keys, read from the DDL."""
+    sql = open(path, encoding="utf-8").read()
+    tables = {}
+    for m in re.finditer(r"CREATE TABLE (\w+) \([^\n]*\n(.*?)\n\) ENGINE", sql, re.S):
+        cols, pk, nullable, fks = [], [], set(), []
+        for raw in m.group(2).split("\n"):
+            line = raw.split("--")[0].strip().rstrip(",")
+            if line.startswith("PRIMARY KEY"):
+                pk += [c.strip() for c in re.search(r"\((.*?)\)", line).group(1).split(",")]
+                continue
+            fm = re.search(r"FOREIGN KEY \((.*?)\)\s+REFERENCES (\w+)", line)
+            if fm:
+                fks.append(([c.strip() for c in fm.group(1).split(",")], fm.group(2)))
+                continue
+            cm = COL_RE.match(line)
+            if cm:
+                cols.append(cm.group(1))
+                if "PRIMARY KEY" in line:
+                    pk.append(cm.group(1))
+                if "NOT NULL" not in line and "PRIMARY KEY" not in line:
+                    nullable.add(cm.group(1))
+        tables[m.group(1)] = dict(cols=cols, pk=pk, nullable=nullable, fks=fks)
+    return tables
+
+
+def column_lines(tb):
+    refs = {}
+    for cols, ref in tb["fks"]:
+        for c in cols:
+            if ref not in refs.setdefault(c, []):
+                refs[c].append(ref)
+    lines = []
+    for c in tb["cols"]:
+        name = f"<u>{c}</u>" if c in tb["pk"] else c
+        tag = ("<b>PK</b> " if c in tb["pk"] else "") + ('<i style="color:#1a5fb4">FK</i> ' if c in refs else "")
+        target = f' <span style="color:#1a5fb4">-&gt; {", ".join(refs[c])}</span>' if c in refs else ""
+        plain = (("PK " if c in tb["pk"] else "") + ("FK " if c in refs else "") + c
+                 + (" -> " + ", ".join(refs[c]) if c in refs else ""))
+        lines.append((plain, tag + name + target))
+    return lines
+
+
+def build_relational(spec, idx):
+    pg = Page(spec, idx)
+    tables = parse_schema()
+    missing = set(tables) - set(TABLE_DOMAIN)
+    assert not missing, f"tables without an area in TABLE_DOMAIN: {sorted(missing)}"
+    order = ["locale", "identity", "games", "profile", "sessions", "social", "moderation"]
+    top = 0
+    for dom in order:
+        names = [t for t in tables if TABLE_DOMAIN[t] == dom]
+        title, fill, stroke = DOMAINS[dom]
+        boxes, x, row_h = {}, 40, 0
+        for t in names:
+            lines = column_lines(tables[t])
+            w = max(220, 6.6 * max(len(pl) for pl, _ in lines + [(t, "")]) + 36)
+            h = 36 + 17 * len(lines) + 10
+            label = (f'<div style="text-align:center;font-size:13px"><b>{t}</b></div>'
+                     '<hr size="1">' + "<br>".join(html for _, html in lines))
+            st = (f"rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;"
+                  f"fillColor=#ffffff;strokeColor={stroke};strokeWidth=1.5;fontSize=11;")
+            boxes[t] = pg.add("entity", x + w / 2, top + 60 + h / 2, w, h, label, st, z=3)
+            x += w + 50
+            row_h = max(row_h, h)
+        links = [(t, cols, ref) for t in names for cols, ref in tables[t]["fks"]
+                 if ref != t and TABLE_DOMAIN.get(ref) == dom]
+        lane_w = x + 10
+        lane_h = 60 + row_h + 40 + 16 * len(links) + 20
+        pg.add("lane", lane_w / 2, top + lane_h / 2, lane_w, lane_h, title,
+               f"rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};"
+               f"fillOpacity=40;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=14;fontStyle=1;"
+               f"fontSize=20;fontColor={stroke};", z=0)
+        row_bottom = top + 60 + row_h
+        for k, (t, cols, ref) in enumerate(links):
+            a, b = boxes[t], boxes[ref]
+            optional = all(c in tables[t]["nullable"] for c in cols)
+            ex, en = 0.35 + 0.3 * ((k % 3) / 2), 0.2 + 0.6 * ((k % 5) / 4)
+            level = row_bottom + 30 + 16 * k
+            sx, tx = a.cx + (ex - 0.5) * a.w, b.cx + (en - 0.5) * b.w
+            st = (f"html=1;rounded=1;strokeColor={stroke};strokeWidth=1.5;startArrow=ERmany;startFill=0;"
+                  f"endArrow={'ERzeroToOne' if optional else 'ERmandOne'};endFill=0;"
+                  f"exitX={ex:.2f};exitY=1;exitDx=0;exitDy=0;entryX={en:.2f};entryY=1;entryDx=0;entryDy=0;")
+            pg.edge(a, b, "", st, [(sx, level), (tx, level)], lpos=0)
+        top += lane_h + 60
+    return pg
+
+
 def add_legend(pg, x, y):
     """Legend block; x,y = top-left."""
     pg.add("legend", x + 350, y + 190, 700, 380, "", "rounded=1;arcSize=2;fillColor=#ffffff;"
@@ -664,7 +780,7 @@ def page_xml(pg):
     if pg.spec.get("legend", True):
         add_legend(pg, x0, y1 + 60)
     else:
-        pg.add("text", x0 + 850, y1 + 40, 1700, 30,
+        pg.add("text", x0 + 850, y1 + 40, 1700, 30, pg.spec.get("note") or
                "<b style=\"color:#2e8b57\">1 : 1</b> one-to-one &nbsp;&nbsp; <b style=\"color:#1a5fb4\">1 : N</b> one-to-many &nbsp;&nbsp; <b style=\"color:#c01c28\">M : N</b> many-to-many.&nbsp;&nbsp; Numbers at each line end say how many of that entity take part.  "
                "Dashed = MongoDB.  Double border = weak entity.",
                "text;html=1;fontSize=13;align=left;fontColor=#555555;", z=4)
@@ -757,7 +873,7 @@ def validate():
         for p in r["parts"]:
             assert p[0] in ENTITIES, f"{name}: unknown entity {p[0]}"
     for spec in PAGES:
-        if spec.get("kind") == "overview":
+        if spec.get("kind") in ("overview", "relational"):
             continue
         have = {e[0] for e in spec["ents"]}
         for ri in spec["rels"]:
@@ -768,11 +884,11 @@ def validate():
 
 def main():
     validate()
-    pages = [build_overview(s, i) if s.get("kind") == "overview" else build_detail(s, i)
-             for i, s in enumerate(PAGES)]
+    builders = {"overview": build_overview, "relational": build_relational}
+    pages = [builders.get(s.get("kind"), build_detail)(s, i) for i, s in enumerate(PAGES)]
     total = 0
     for pg in pages:
-        probs = check(pg)
+        probs = check(pg) if pg.spec.get("kind") != "relational" else []
         total += len(probs)
         print(f"[{pg.spec['name']}] shapes={len(pg.shapes)} edges={len(pg.edges)} problems={len(probs)}")
         for p in probs[:30]:
