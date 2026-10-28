@@ -534,6 +534,18 @@ CREATE TABLE audit_log (                                     -- append-only; fil
   KEY ix_audit_entity (entity, entity_id)
 ) ENGINE=InnoDB;
 
+-- ============================================================ vector store sync
+CREATE TABLE embedding_outbox (                              -- MySQL -> MongoDB queue; filled by 07_vector_outbox.sql triggers
+  entity      ENUM('player','session') NOT NULL,             -- player = users.user_id, session = lfg_session.session_id
+  entity_id   BIGINT UNSIGNED NOT NULL,
+  op          ENUM('upsert','delete') NOT NULL,
+  enqueued_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  attempts    TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  last_error  VARCHAR(255) NULL,
+  PRIMARY KEY (entity, entity_id),                           -- repeated edits coalesce into one row
+  KEY ix_outbox_enqueued (enqueued_at)
+) ENGINE=InnoDB;
+
 -- ============================================================ indexes for common lookups
 CREATE INDEX ix_session_status   ON lfg_session (status, game_id, scheduled_start);
 CREATE INDEX ix_participant_user ON session_participant (user_id, status);

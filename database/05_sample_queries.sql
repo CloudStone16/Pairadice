@@ -121,3 +121,11 @@ GROUP BY r.role_id, r.role_name ORDER BY r.role_id;
 CALL sp_recommend_sessions(1, 5, FALSE);   -- aarav_plays
 CALL sp_recommend_players(10, 5);          -- priya_gg's session needs 2 duelists
 CALL sp_recommend_players(2, 5);           -- lukas_mc's Bedwars session
+
+-- Q18 Vector-store sync (07_vector_outbox.sql): edits queue MongoDB re-embeds; repeated edits coalesce into one row
+START TRANSACTION;
+UPDATE users SET bio = 'Bedwars rusher, chill EU squad, also into redstone builds' WHERE user_id = 4;
+INSERT INTO user_tag (user_id, tag_id) VALUES (4, 7);        -- late-night
+UPDATE lfg_session SET status = 'cancelled' WHERE session_id = 10;
+SELECT entity, entity_id, op, enqueued_at FROM embedding_outbox ORDER BY enqueued_at;
+ROLLBACK;

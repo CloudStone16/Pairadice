@@ -46,6 +46,9 @@ CALL t_expect_error('TRIGGER/RBAC: player handles report', "UPDATE report SET ha
 CALL t_expect_error('TRIGGER/RBAC: player assigns a role', "INSERT INTO user_role (user_id, role_id, assigned_by) VALUES (12, 2, 1)");
 CALL t_expect_error('TRIGGER: reopen a completed session', "UPDATE lfg_session SET status = 'open' WHERE session_id = 3");
 CALL t_expect_error('TRIGGER: friend request when blocked', "INSERT INTO friendship (requester_id, addressee_id) VALUES (11, 2)");
+CALL t_expect_error('NOT NULL: outbox row without entity', "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES (NULL, 1, 'upsert')");
+CALL t_expect_error('NOT NULL: outbox row without id',    "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES ('player', NULL, 'upsert')");
+CALL t_expect_error('PK: outbox duplicate entity row',    "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES ('player', 1, 'upsert'), ('player', 1, 'delete')");
 CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
 CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
 ROLLBACK;

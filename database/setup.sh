@@ -5,13 +5,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_NAME="pairadice"
-MIN_VERSION="8.0.16"          # first MySQL release that enforces CHECK constraints
+MIN_VERSION="8.0.19"          # CHECK constraints (8.0.16) + INSERT ... AS alias ON DUPLICATE KEY (8.0.19, used by 07)
 
 MYSQL_USER="root"
 MYSQL_HOST="127.0.0.1"
 MYSQL_PORT="3306"
 SEED=1
 RBAC=1
+VECTOR=1
 RUN_TESTS=0
 RUN_SAMPLES=0
 ASSUME_YES=0
@@ -33,7 +34,8 @@ Connection:
 What to load:
       --no-seed         schema + routines only, no sample data
       --no-rbac         skip the MySQL roles (needs CREATE ROLE privilege)
-      --tests           run the constraint tests afterwards (26 must-fail statements)
+      --no-vector       skip the MongoDB sync triggers (07_vector_outbox.sql)
+      --tests           run the constraint tests afterwards (29 must-fail statements)
       --samples         print the sample queries afterwards
       --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
 
@@ -67,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     -P|--port)       MYSQL_PORT="${2:?missing value for $1}"; shift 2 ;;
     --no-seed)       SEED=0; shift ;;
     --no-rbac)       RBAC=0; shift ;;
+    --no-vector)     VECTOR=0; shift ;;
     --tests)         RUN_TESTS=1; shift ;;
     --samples)       RUN_SAMPLES=1; shift ;;
     --app-user)      APP_USER="${2:?missing value for $1}"; shift 2 ;;
@@ -84,7 +87,7 @@ done
 command -v mysql >/dev/null 2>&1 \
   || die "mysql client not found. Install MySQL first (macOS: brew install mysql, Ubuntu: sudo apt install mysql-server)."
 
-for f in 01_schema.sql 02_routines.sql 03_seed.sql 04_rbac.sql 05_sample_queries.sql 06_constraint_tests.sql; do
+for f in 01_schema.sql 02_routines.sql 03_seed.sql 04_rbac.sql 05_sample_queries.sql 06_constraint_tests.sql 07_vector_outbox.sql; do
   [[ -f "$SCRIPT_DIR/$f" ]] || die "missing $SCRIPT_DIR/$f"
 done
 
@@ -156,6 +159,9 @@ if [[ "$RBAC" -eq 1 ]]; then
   step "Creating MySQL roles (04_rbac.sql)"
   run_mysql < "$SCRIPT_DIR/04_rbac.sql" >/dev/null \
     || die "04_rbac.sql failed. The user needs CREATE ROLE and GRANT privileges; re-run with --no-rbac to skip."
+fi
+if [[ "$VECTOR" -eq 1 ]]; then
+  load 07_vector_outbox.sql "Creating MongoDB sync triggers (07_vector_outbox.sql)"
 fi
 
 # ---------------------------------------------------------------- optional app login

@@ -1,0 +1,20 @@
+{
+  "name": "pairadice-vector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PairADice MongoDB vector store: player and session interest embeddings synced from MySQL",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "init-db": "node scripts/init-db.js",
+    "backfill": "node scripts/backfill.js",
+    "worker": "node scripts/worker.js --watch",
+    "sync": "node scripts/worker.js --once",
+    "demo": "node scripts/demo-rud.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.2",
+    "mongodb": "7.7.0",
+    "mysql2": "3.24.6"
+  }
+}

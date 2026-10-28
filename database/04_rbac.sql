@@ -2,8 +2,8 @@
 -- Mirrors the in-app role / permission tables: player < moderator < admin.
 -- Roles are server-wide objects, so they are dropped and recreated for a clean re-run.
 
-DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin';
-CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin';
+DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker';
+CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker';
 
 -- ---------------------------------------------------------------- player
 -- read the catalogue and public views (views run as DEFINER, so no base-table access is needed)
@@ -34,6 +34,8 @@ GRANT SELECT, INSERT, UPDATE ON pairadice.friendship TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_players  TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_accept_participant TO 'pairadice_player';
+-- hybrid (SQL + vector) recommendations are logged by the API, and outcomes updated as the player acts
+GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pairadice_player';
 
 -- ---------------------------------------------------------------- moderator = player + moderation
 GRANT 'pairadice_player' TO 'pairadice_moderator';
@@ -46,6 +48,26 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_expire_sanctions TO 'pairadice_moderator
 
 -- ---------------------------------------------------------------- admin = everything in this schema
 GRANT ALL PRIVILEGES ON pairadice.* TO 'pairadice_admin';
+
+-- ---------------------------------------------------------------- vector worker = read embedding sources, drain the outbox
+-- Used by vector/scripts/worker.js and backfill.js. No auth tables: the worker never sees secrets.
+GRANT SELECT ON pairadice.users               TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.user_tag            TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.user_language       TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.player_game_profile TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.platform_account    TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.profile_mode        TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.profile_role        TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.lfg_session         TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.session_tag         TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.session_language    TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.session_slot        TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.tag                 TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.game                TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.game_mode           TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.game_role           TO 'pairadice_vec_worker';
+GRANT SELECT ON pairadice.platform            TO 'pairadice_vec_worker';
+GRANT SELECT, UPDATE, DELETE ON pairadice.embedding_outbox TO 'pairadice_vec_worker';
 
 -- Example login accounts (choose your own passwords; never commit them):
 --   CREATE USER 'pd_api'@'localhost' IDENTIFIED BY '<password>';

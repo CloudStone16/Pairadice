@@ -119,10 +119,10 @@ ent("AUDIT_LOG", "moderation", [
     "*log_id", "entity", "entity_id", "action", "old_value", "new_value", "logged_at"])
 # vector (external, MongoDB)
 ent("PLAYER_EMBEDDING", "vector", [
-    "*user_id", "embedding", "source_text", "model", "updated_at",
-    "+game_ids", "+language_codes", "region_id"], ext=True)
+    "*user_id", "embedding", "source_text", "source_hash", "model", "updated_at",
+    "status", "+game_ids", "+language_codes", "region_id"], ext=True)
 ent("SESSION_EMBEDDING", "vector", [
-    "*session_id", "embedding", "source_text", "model", "updated_at",
+    "*session_id", "embedding", "source_text", "source_hash", "model", "updated_at",
     "game_id", "region_id", "+language_codes", "status"], ext=True)
 
 # ---------------------------------------------------------- relationships
@@ -345,7 +345,7 @@ PAGES = [
     dict(
         key="relational", name="9 Relational Schema", kind="relational", legend=False,
         title="9 - Relational Schema (MySQL tables)",
-        sub="44 tables, read straight from database/01_schema.sql. PK = primary key (underlined), FK = foreign key (-> referenced table).",
+        sub="45 tables, read straight from database/01_schema.sql. PK = primary key (underlined), FK = foreign key (-> referenced table).",
         note="Crow's-foot lines = foreign keys inside an area: the many end sits on the child table, the bar end on the parent "
              "(a circle means the FK column is optional). FKs that point to another area are shown only as '-> table' in the column list.",
     ),
@@ -365,6 +365,7 @@ TABLE_DOMAIN = {
     "team": "social", "team_member": "social", "friendship": "social", "message": "social", "review": "social",
     "badge": "social", "user_badge": "social",
     "user_block": "moderation", "report": "moderation", "sanction": "moderation", "audit_log": "moderation",
+    "embedding_outbox": "sessions",
 }
 
 # ----------------------------------------------------------------- model
