@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#b44a4a",
+  "k": "#120e1f",
+  "o": "#8a5a3c",
+  "r": "#e8665f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "..kkkkkk........",
+  ".korrrrrkkk.....",
+  ".korrrrrrrrkk...",
+  ".korrwrrrrrrrk..",
+  ".korrrrrrrrrrrk.",
+  ".korrrrrrrrrrk..",
+  ".koRRRRRRRRkk...",
+  ".koRRRRRRkk.....",
+  ".kokkkkkk.......",
+  ".kok............",
+  ".kok............",
+  ".kok............",
+  ".kok............",
+  ".kook...........",
+  ".koook..........",
+  "..kkk..........."
+ ],
+ "notes": "report flag"
+}

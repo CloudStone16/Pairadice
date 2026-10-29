@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "L": "#a094d6",
+  "N": "#a0693f",
+  "c": "#f3ead3",
+  "k": "#120e1f",
+  "o": "#8a5a3c",
+  "r": "#e8665f",
+  "z": "#d9aa7c"
+ },
+ "rows": [
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  "kHHHHHHHHHHHHHHk",
+  "kHzzNzzzzzzNzzok",
+  "kHzzzcccccNzzzok",
+  "kHzzzccrccNzzzok",
+  "kHNzzcLLLczzzNok",
+  "kHzzzcccccNzzzok",
+  "kHzzzcLLLczzzzok",
+  "kHzNzcccccNzzzok",
+  "kHzzzzzzzzzzNzok",
+  "kHzzzNzzzzzzzzok",
+  "kooooooooooooook",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "cork board with pinned note"
+}

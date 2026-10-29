@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "Y": "#c99a3a",
+  "o": "#8a5a3c"
+ },
+ "rows": [
+  "OHoOooOOOHoooooO",
+  "OHoOYoOOOHooYooO",
+  "OHoOooOOOHooOooO",
+  "OHooooOoOHooOooO",
+  "OHooooooOHooOooO",
+  "OHooooooOHoooooO",
+  "OHoooooOOHoooooO",
+  "OHoooooOOHoooooO",
+  "OHoooooOOHoooooo",
+  "OHoooooOOHoooooo",
+  "OHooooooOHoooooo",
+  "OHooooooOHoooooo",
+  "OHooooooOHoooooO",
+  "OHooooooOHoooooO",
+  "OHoOYoOoOHooYooO",
+  "OHoOooOOOHoooooO"
+ ],
+ "notes": "wood plank texture, seamless"
+}

@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "O": "#5e3b27",
+  "R": "#b44a4a",
+  "a": "#efe2c4",
+  "k": "#120e1f",
+  "o": "#8a5a3c",
+  "r": "#e8665f",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "...........kk...",
+  "......kkkkkOOk..",
+  ".....krrrrkOOk..",
+  "....krrrrrrOOk..",
+  "...krrrrrrrrk...",
+  "..krrrrrrrrrrk..",
+  ".krrrrrrrrrrrrk.",
+  "kRRRRRRRRRRRRRRk",
+  ".kaaaaaaaaaaaak.",
+  ".kaaaaaaaaaaaAk.",
+  ".kaayyaaaoooaAk.",
+  ".kaayyaaaoooaAk.",
+  ".kaaaaaaaooyaAk.",
+  ".kAAAAAAAAAAAAk.",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "cozy cottage"
+}

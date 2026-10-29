@@ -1,0 +1,31 @@
+{
+ "size": 16,
+ "palette": {
+  "B": "#4a6fc0",
+  "E": "#c97a3a",
+  "R": "#b44a4a",
+  "b": "#6a95e6",
+  "e": "#f2a65a",
+  "k": "#120e1f",
+  "r": "#e8665f"
+ },
+ "rows": [
+  ".....kk..kk.....",
+  "....krrkkrrk....",
+  "...krrrrrrrrk...",
+  "...krrrrrrrRk...",
+  "....krrrrrRk....",
+  ".....krrRRk.....",
+  "....kkkrRk.kk...",
+  "...keekkk.kbbk..",
+  "..keeeek.kbbbbk.",
+  ".keeeeeEkbbbbbBk",
+  ".kekekeEkbkbkbBk",
+  ".keeeeeEkbbbbbBk",
+  "..kEeeEk.kBbbBk.",
+  "...kEEk...kBBk..",
+  "..kekkek.kbkkbk.",
+  ".keeeeeEkbbbbbBk"
+ ],
+ "notes": "two friends with a heart"
+}

@@ -1,3 +1,9 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
+-- TIMESTAMPS: every DATETIME column in this schema is UTC. Connections must run
+-- SET time_zone='+00:00' (setup.sh passes --init-command for this; app pools must do the same),
+-- otherwise CURRENT_TIMESTAMP / NOW() defaults and trigger writes are stored in the session's local time.
+-- ENCODING: load/connect as utf8mb4 (mysql --default-character-set=utf8mb4), or text is double-encoded.
 -- PairADice relational schema (MySQL 8.0.16+; tested on 9.x)
 -- Mirrors documents/pairadice_erd.drawio and documents/RELATIONAL_SCHEMA.md.
 -- Load order: 01_schema, 02_routines, 03_seed, 04_rbac, 05_sample_queries.

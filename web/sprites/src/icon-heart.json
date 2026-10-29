@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#b44a4a",
+  "k": "#120e1f",
+  "r": "#e8665f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "...kkkk..kkkk...",
+  "..krrrrkkrrrrk..",
+  ".krrrrrrrrrrrRk.",
+  "krrwwrrrrrrrrRRk",
+  "krrwrrrrrrrrrRRk",
+  "krrrrrrrrrrrrRRk",
+  ".krrrrrrrrrrRRk.",
+  "..krrrrrrrrRRk..",
+  "...krrrrrrRRk...",
+  "....krrrrRRk....",
+  ".....krrRRk.....",
+  "......kRRk......",
+  ".......kk.......",
+  "................",
+  "................"
+ ],
+ "notes": "heart"
+}

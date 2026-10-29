@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "Y": "#c99a3a",
+  "k": "#120e1f",
+  "m": "#a59fbd",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  "......kkkk......",
+  ".....kmmmmk.....",
+  "....kmmkkmmk....",
+  "....kmk..kmk....",
+  "...kkmkkkkmkk...",
+  "..kyyyyyyyyyyk..",
+  "..kywyyyyyyyYk..",
+  "..kyyyyyyyyyYk..",
+  "..kyyyykkyyyYk..",
+  "..kyyyykkyyyYk..",
+  "..kyyyyYYyyyYk..",
+  "..kyyyyyyyyyYk..",
+  "..kYYYYYYYYYYk..",
+  "...kkkkkkkkkk...",
+  "................"
+ ],
+ "notes": "padlock"
+}

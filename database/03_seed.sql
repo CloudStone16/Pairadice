@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice sample data. Run after 01_schema.sql and 02_routines.sql.
 -- Triggers are active while seeding, so derived columns (current_players, avg_rating,
 -- trust_score, sessions_completed), badges and audit_log rows fill themselves.

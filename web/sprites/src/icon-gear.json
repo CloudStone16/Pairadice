@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "L": "#a094d6",
+  "c": "#f3ead3",
+  "k": "#120e1f",
+  "l": "#b4a7e8"
+ },
+ "rows": [
+  ".......kk.......",
+  "......kllk......",
+  "...kk.klLk.kk...",
+  "..kllkclLkklLk..",
+  "..klccllllllLk..",
+  "...kcllLLllLk...",
+  ".kkcllLkkLlLkkk.",
+  "kllllLk..kllllLk",
+  "klLLlLk..kllLLLk",
+  ".kkkllLkkllLkkk.",
+  "...klllllllLk...",
+  "..kllLLllLLlLk..",
+  "..kLLkklLkkLLk..",
+  "...kk.klLk.kk...",
+  "......kLLk......",
+  ".......kk......."
+ ],
+ "notes": "settings gear"
+}

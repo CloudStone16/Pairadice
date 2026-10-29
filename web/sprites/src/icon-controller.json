@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "M": "#7d7799",
+  "b": "#6a95e6",
+  "g": "#72c374",
+  "k": "#120e1f",
+  "m": "#a59fbd",
+  "q": "#cfcae0",
+  "r": "#e8665f",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kqqqqqqqqqqqqk.",
+  "kqmmmmmmmmmmmmMk",
+  "kqmmkmmmmmmbmmMk",
+  "kqmkkkmmmmgmrmMk",
+  "kqmmkmmmmmmymmMk",
+  "kqmmmmmmmmmmmmMk",
+  ".kqmmmkkkkmmmMk.",
+  "..kMMMk..kMMMk..",
+  "...kkk....kkk...",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "SNES pad"
+}

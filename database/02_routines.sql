@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice routines: helper functions, procedures, triggers, views.
 -- Run after 01_schema.sql. Business rules that CHECK constraints cannot express live here.
 USE pairadice;
@@ -62,7 +64,7 @@ BEGIN                                                        -- 0..100: base 50,
   DECLARE v_active INT;
   SELECT COUNT(*) INTO v_active FROM sanction
    WHERE user_id = p_user_id AND sanction_type IN ('mute','suspend','ban')
-     AND starts_at <= NOW() AND (ends_at IS NULL OR ends_at > NOW());
+     AND starts_at <= UTC_TIMESTAMP() AND (ends_at IS NULL OR ends_at > UTC_TIMESTAMP());
   RETURN GREATEST(0, LEAST(100, 50 + 3 * p_sessions + IFNULL((p_avg - 3) * 10, 0) - 20 * v_active));
 END$$
 
@@ -103,7 +105,7 @@ BEGIN                                                        -- lift expired sus
    WHERE u.status = 'suspended'
      AND NOT EXISTS (SELECT 1 FROM sanction s
                      WHERE s.user_id = u.user_id AND s.sanction_type = 'suspend'
-                       AND (s.ends_at IS NULL OR s.ends_at > NOW()));
+                       AND (s.ends_at IS NULL OR s.ends_at > UTC_TIMESTAMP()));
   UPDATE users SET trust_score = fn_trust_score(user_id, sessions_completed, avg_rating);
 END$$
 
@@ -424,7 +426,7 @@ BEGIN
     END IF;
   END IF;
   IF NEW.status IN ('left','kicked') AND OLD.status <> NEW.status AND NEW.left_at IS NULL THEN
-    SET NEW.left_at = NOW();
+    SET NEW.left_at = UTC_TIMESTAMP();
   END IF;
 END$$
 
@@ -469,7 +471,7 @@ BEGIN
   IF (SELECT status FROM users WHERE user_id = NEW.sender_id) <> 'active'
      OR EXISTS (SELECT 1 FROM sanction
                 WHERE user_id = NEW.sender_id AND sanction_type = 'mute'
-                  AND starts_at <= NOW() AND (ends_at IS NULL OR ends_at > NOW())) THEN
+                  AND starts_at <= UTC_TIMESTAMP() AND (ends_at IS NULL OR ends_at > UTC_TIMESTAMP())) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Sender is muted, suspended or banned';
   END IF;
   IF NEW.session_id IS NOT NULL
@@ -506,7 +508,7 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only moderators can handle reports';
   END IF;
   IF NEW.status IN ('actioned','dismissed') AND OLD.status NOT IN ('actioned','dismissed') THEN
-    SET NEW.resolved_at = NOW();
+    SET NEW.resolved_at = UTC_TIMESTAMP();
   END IF;
 END$$
 

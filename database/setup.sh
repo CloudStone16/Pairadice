@@ -18,6 +18,7 @@ RUN_SAMPLES=0
 ASSUME_YES=0
 START_SERVER=0
 APP_USER=""
+WEB_USER=""
 
 usage() {
   cat <<EOF
@@ -35,9 +36,11 @@ What to load:
       --no-seed         schema + routines only, no sample data
       --no-rbac         skip the MySQL roles (needs CREATE ROLE privilege)
       --no-vector       skip the MongoDB sync triggers (07_vector_outbox.sql)
-      --tests           run the constraint tests afterwards (29 must-fail statements)
+      --tests           run the constraint tests afterwards (34 must-fail statements)
       --samples         print the sample queries afterwards
       --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
+      --web-user NAME   also create a READ-ONLY login NAME@localhost with the pairadice_web_ro role
+                        (for the web app; prompts for a password; needs RBAC)
 
 Other:
       --start-server    try to start a local MySQL server if it is not running
@@ -48,6 +51,10 @@ Examples:
   ./database/setup.sh
   ./database/setup.sh --tests --samples
   ./database/setup.sh -u admin -h db.local -P 3307 --no-seed
+  ./database/setup.sh -y --tests --web-user pd_web
+
+Every mysql call runs with --default-character-set=utf8mb4 and time_zone='+00:00': all
+DATETIME columns are UTC and the .sql files are UTF-8. Connect your own clients the same way.
 EOF
 }
 
@@ -73,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     --tests)         RUN_TESTS=1; shift ;;
     --samples)       RUN_SAMPLES=1; shift ;;
     --app-user)      APP_USER="${2:?missing value for $1}"; shift 2 ;;
+    --web-user)      WEB_USER="${2:?missing value for $1}"; shift 2 ;;
     --start-server)  START_SERVER=1; shift ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
     --help)          usage; exit 0 ;;
@@ -82,6 +90,10 @@ done
 
 [[ "$APP_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$APP_USER" ]] \
   || die "--app-user must be 1-32 letters, digits or underscores"
+[[ "$WEB_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$WEB_USER" ]] \
+  || die "--web-user must be 1-32 letters, digits or underscores"
+[[ -z "$APP_USER" || "$APP_USER" != "$WEB_USER" ]] \
+  || die "--app-user and --web-user must be different logins."
 
 # ---------------------------------------------------------------- prerequisites
 command -v mysql >/dev/null 2>&1 \
@@ -98,7 +110,12 @@ fi
 export MYSQL_PWD                 # read by the mysql client; never placed on the command line
 trap 'unset MYSQL_PWD' EXIT
 
-run_mysql() { mysql --protocol=TCP -u "$MYSQL_USER" -h "$MYSQL_HOST" -P "$MYSQL_PORT" "$@"; }
+# utf8mb4: the .sql files are UTF-8; without it the client's latin1 default double-encodes non-ASCII text.
+# time_zone UTC: every DATETIME column is UTC, so CURRENT_TIMESTAMP / NOW() writes must be made in UTC.
+run_mysql() {
+  mysql --protocol=TCP --default-character-set=utf8mb4 --init-command="SET time_zone='+00:00'" \
+        -u "$MYSQL_USER" -h "$MYSQL_HOST" -P "$MYSQL_PORT" "$@"
+}
 
 # ---------------------------------------------------------------- server reachable?
 server_up() { run_mysql -N -e "SELECT 1" >/dev/null 2>&1; }
@@ -154,6 +171,10 @@ load 01_schema.sql   "Creating database and tables (01_schema.sql)"
 load 02_routines.sql "Creating functions, procedures, triggers and views (02_routines.sql)"
 if [[ "$SEED" -eq 1 ]]; then
   load 03_seed.sql   "Loading sample data (03_seed.sql)"
+  # sanity check: 'Sofía' must be stored as single-encoded UTF-8 (HEX 536F66C3AD61); a double-encoded load gives 536F66C383C2AD61
+  sofia_hex="$(run_mysql -N -e "SELECT HEX(display_name) FROM $DB_NAME.users WHERE username = 'sofia_bw'")"
+  [[ "$sofia_hex" == "536F66C3AD61" ]] \
+    || die "text was loaded double-encoded (users.sofia_bw HEX is '${sofia_hex:-<none>}', expected 536F66C3AD61). The mysql client's character set is not utf8mb4; check [client]/[mysql] default-character-set in your my.cnf, then re-run."
 fi
 if [[ "$RBAC" -eq 1 ]]; then
   step "Creating MySQL roles (04_rbac.sql)"
@@ -178,6 +199,22 @@ GRANT 'pairadice_player' TO '${APP_USER}'@'localhost';
 SET DEFAULT ROLE 'pairadice_player' TO '${APP_USER}'@'localhost';
 SQL
   unset app_pw app_pw2 app_pw_sql
+fi
+
+# ---------------------------------------------------------------- optional read-only web login
+if [[ -n "$WEB_USER" ]]; then
+  [[ "$RBAC" -eq 1 ]] || die "--web-user needs the roles from 04_rbac.sql (remove --no-rbac)."
+  read -r -s -p "Password for new MySQL login '${WEB_USER}'@'localhost': " web_pw; echo
+  read -r -s -p "Repeat password: " web_pw2; echo
+  [[ -n "$web_pw" && "$web_pw" == "$web_pw2" ]] || die "passwords are empty or do not match."
+  web_pw_sql="${web_pw//\\/\\\\}"; web_pw_sql="${web_pw_sql//\'/\'\'}"
+  step "Creating read-only login '${WEB_USER}'@'localhost' with role pairadice_web_ro"
+  run_mysql <<SQL >/dev/null
+CREATE USER IF NOT EXISTS '${WEB_USER}'@'localhost' IDENTIFIED BY '${web_pw_sql}';
+GRANT 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
+SET DEFAULT ROLE 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
+SQL
+  unset web_pw web_pw2 web_pw_sql
 fi
 
 # ---------------------------------------------------------------- tests

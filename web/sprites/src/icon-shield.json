@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "B": "#4a6fc0",
+  "b": "#6a95e6",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kbbbbbbbbbbbbk.",
+  ".kbwbbbbbbbbbBk.",
+  ".kbbbbwwbbbbbBk.",
+  ".kbbbbwwbbbbbBk.",
+  ".kbbwwwwwwwwbBk.",
+  ".kbbwwwwwwwwbBk.",
+  ".kbbbbwwbbbbbBk.",
+  "..kbbbwwbbbbBk..",
+  "..kbbbbbbbbbBk..",
+  "...kbbbbbbbBk...",
+  "....kbbbbbBk....",
+  ".....kbbbBk.....",
+  "......kkkk......",
+  "................"
+ ],
+ "notes": "moderator shield"
+}

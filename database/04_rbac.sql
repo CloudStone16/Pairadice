@@ -1,9 +1,10 @@
+SET NAMES utf8mb4;
 -- PairADice database-level RBAC (MySQL roles). Run after 02_routines.sql.
 -- Mirrors the in-app role / permission tables: player < moderator < admin.
 -- Roles are server-wide objects, so they are dropped and recreated for a clean re-run.
 
-DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker';
-CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker';
+DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro';
+CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro';
 
 -- ---------------------------------------------------------------- player
 -- read the catalogue and public views (views run as DEFINER, so no base-table access is needed)
@@ -69,9 +70,46 @@ GRANT SELECT ON pairadice.game_role           TO 'pairadice_vec_worker';
 GRANT SELECT ON pairadice.platform            TO 'pairadice_vec_worker';
 GRANT SELECT, UPDATE, DELETE ON pairadice.embedding_outbox TO 'pairadice_vec_worker';
 
+-- ---------------------------------------------------------------- web read-only (Phase 1 web app)
+-- The Next.js app must NOT connect as root. This role can only read public data and call the
+-- recommendation procedure; there is no INSERT/UPDATE/DELETE anywhere and no access at all to
+-- auth_account, auth_token, platform_account, sanction, report, audit_log, embedding_outbox or
+-- match_recommendation. users is limited to non-sensitive columns (no bio, country, home region,
+-- strictness, counters, email...).
+GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at, trust_score, avg_rating)
+  ON pairadice.users TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.game                TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.game_mode           TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.rank_tier           TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.game_role           TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.geo_region          TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.tag                 TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.language            TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.lfg_session         TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.session_slot        TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.session_language    TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.session_tag         TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.friendship          TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.message             TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.user_block          TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.player_game_profile TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.user_badge          TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.badge               TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.user_language       TO 'pairadice_web_ro';
+-- Views and sp_recommend_sessions are DEFINER objects (SQL SECURITY DEFINER is the default and 02_routines.sql
+-- does not override it), so they run with the loader's privileges: the narrow column grant on users does not
+-- break the views, and the procedure's temporary table (tmp_session_rec) needs no privilege from this role.
+-- Consequence: the procedure could write match_recommendation as DEFINER if called with p_log = TRUE,
+-- so the web app MUST call it with p_log = FALSE: CALL sp_recommend_sessions(?, ?, FALSE).
+GRANT SELECT ON pairadice.v_open_sessions  TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.v_session_roster TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.v_player_card    TO 'pairadice_web_ro';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_web_ro';
+
 -- Example login accounts (choose your own passwords; never commit them):
 --   CREATE USER 'pd_api'@'localhost' IDENTIFIED BY '<password>';
 --   GRANT 'pairadice_player' TO 'pd_api'@'localhost';
 --   SET DEFAULT ROLE 'pairadice_player' TO 'pd_api'@'localhost';
+-- or, for the read-only web app:  ./database/setup.sh --web-user pd_web
 
 SHOW GRANTS FOR 'pairadice_moderator' USING 'pairadice_player';

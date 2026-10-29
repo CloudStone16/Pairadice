@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "L": "#a094d6",
+  "c": "#f3ead3",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "................",
+  "..kkkkkkkkkkk...",
+  ".kccccccccccck..",
+  "kcwccccccccccLk.",
+  "kccccccccccccLk.",
+  "kccckcckcckccLk.",
+  "kccckcckcckccLk.",
+  "kccccccccccccLk.",
+  ".kcccccccccLLk..",
+  "..kccckkkkkkk...",
+  "..kcck..........",
+  "..kck...........",
+  "...k............",
+  "................",
+  "................"
+ ],
+ "notes": "speech bubble"
+}

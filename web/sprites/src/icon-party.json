@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "B": "#4a6fc0",
+  "E": "#c97a3a",
+  "G": "#4a9a56",
+  "b": "#6a95e6",
+  "e": "#f2a65a",
+  "f": "#f8c58a",
+  "g": "#72c374",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  ".......kk.......",
+  "......kffk......",
+  ".....kfeefk.....",
+  "....kfeeeeEk....",
+  "..kkkfkeekEkkk..",
+  ".kbbkfeeeeEkggk.",
+  "kbbbbkEkkEkgggGk",
+  "kbkbkBkEEkgkgkGk",
+  "kbbbbBkkkkggggGk",
+  ".kBBBk....kGGGk.",
+  "..kkk......kkk..",
+  "................",
+  "................"
+ ],
+ "notes": "three tiny heads"
+}

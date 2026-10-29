@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "Y": "#c99a3a",
+  "c": "#f3ead3",
+  "k": "#120e1f",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  ".....kkkkkk.....",
+  "...kkwwwwwwkk...",
+  "..kwwyyAAyywYk..",
+  "..kwycckcccyYk..",
+  ".kwyccckcccAyYk.",
+  ".kwyccckcccAyYk.",
+  ".kwAccckkcccAYk.",
+  ".kwAcccckkkcAYk.",
+  ".kwycccccccAyYk.",
+  ".kwycccccccAyYk.",
+  "..kwyAAccAAyYk..",
+  "..kYYyyAAyyYYk..",
+  "...kkYYYYYYkk...",
+  ".....kkkkkk.....",
+  "................"
+ ],
+ "notes": "clock"
+}

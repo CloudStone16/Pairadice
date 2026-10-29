@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/*
+ * PairADice theme: a cozy cabin at dusk.
+ * Contrast notes (WCAG AA, 4.5:1 for text):
+ *   lilac was #8d7fc4 (4.21:1 on dusk, 3.65:1 on plum - fails).
+ *   Now #a094d6: 6.28 on night, 5.43 on dusk, 4.71 on plum. On plum-2 it is
+ *   3.83:1, so use lavender or cream for text on plum-2.
+ */
+@theme {
+  --color-night: #1d1830;
+  --color-dusk: #2a2342;
+  --color-plum: #352c52;
+  --color-plum-2: #43386a;
+  --color-ink: #120e1f;
+  --color-cream: #f3ead3;
+  --color-lilac: #a094d6;
+  --color-lavender: #b4a7e8;
+  --color-parchment: #efe2c4;
+  --color-parchment-dark: #dccaa3;
+  --color-wood: #8a5a3c;
+  --color-wood-dark: #5e3b27;
+  --color-wood-light: #bd8458;
+  --color-brass: #c99a3a;
+  --color-ember: #f2a65a;
+  --color-sfc-red: #e8665f;
+  --color-sfc-yellow: #f2c35b;
+  --color-sfc-green: #72c374;
+  --color-sfc-blue: #6a95e6;
+
+  --radius-window: 14px;
+  --radius-pill: 999px;
+  --radius-chip: 10px;
+  --radius-frame: 12px;
+
+  /* soft inset bevel + ink drop shadow for RPG windows */
+  --shadow-bevel: inset 0 2px 0 rgb(255 255 255 / 0.07),
+    inset 0 -3px 0 rgb(18 14 31 / 0.35);
+  --shadow-window: 0 6px 0 rgb(18 14 31 / 0.55), 0 14px 28px rgb(18 14 31 / 0.45);
+  /* the Campfire window: ink drop shadow plus a warm ember halo */
+  --shadow-glow: 0 6px 0 rgb(18 14 31 / 0.55), 0 0 44px rgb(242 166 90 / 0.3);
+  --shadow-key: 0 4px 0 var(--key-shadow, #120e1f), 0 8px 14px rgb(18 14 31 / 0.35);
+  --shadow-key-pressed: 0 1px 0 var(--key-shadow, #120e1f);
+
+  --font-display: var(--font-fredoka), ui-rounded, "Segoe UI", system-ui, sans-serif;
+  --font-body: var(--font-nunito), ui-rounded, "Segoe UI", system-ui, sans-serif;
+
+  --animate-flicker: flicker 2.4s ease-in-out infinite;
+  /* decorative bobbing stops by itself after three cycles (WCAG 2.2.2) */
+  --animate-float: float 3.6s ease-in-out 3;
+  /* transform-only so content never starts invisible */
+  --animate-pop: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; filter: brightness(1); }
+    18% { opacity: 0.86; filter: brightness(0.94); }
+    37% { opacity: 1; filter: brightness(1.08); }
+    58% { opacity: 0.9; filter: brightness(0.97); }
+    79% { opacity: 1; filter: brightness(1.05); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  @keyframes pop {
+    from { transform: scale(0.97); }
+    to { transform: none; }
+  }
+}
+
+/*
+ * Base rules live in @layer base so Tailwind utilities (outline-*, font-*, ...)
+ * can override them; unlayered CSS would always win.
+ */
+@layer base {
+  html {
+    font-size: 100%;
+    background-color: var(--color-night);
+    /* the HUD is sticky on desktop; keep focused elements out from under it */
+    scroll-padding-top: 8.5rem;
+  }
+
+  body {
+    background-color: var(--color-night);
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 18%, rgb(243 234 211 / 0.55) 50%, transparent 51%),
+      radial-gradient(1px 1px at 28% 62%, rgb(243 234 211 / 0.4) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 47% 9%, rgb(243 234 211 / 0.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 63% 41%, rgb(243 234 211 / 0.35) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 81% 22%, rgb(243 234 211 / 0.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 92% 71%, rgb(243 234 211 / 0.4) 50%, transparent 51%),
+      radial-gradient(ellipse 80% 50% at 50% 110%, rgb(242 166 90 / 0.14), transparent 70%),
+      radial-gradient(ellipse 70% 60% at 15% -10%, rgb(141 127 196 / 0.18), transparent 70%);
+    background-attachment: fixed;
+    color: var(--color-cream);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    line-height: 1.2;
+  }
+
+  /* cream reads on dark and wood; parchment surfaces set --focus-ring to ink */
+  :focus-visible {
+    outline: 3px solid var(--focus-ring, var(--color-cream));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-ember);
+    color: var(--color-ink);
+  }
+
+  img.pixelated,
+  .pixelated {
+    image-rendering: pixelated;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== pixel-art surfaces (sprite tiles scaled by whole numbers) ===== */
+
+/* wooden plank: shelves, beams, picture frames and floorboards. Never put text on it. */
+@utility bg-plank {
+  background-color: var(--color-wood-dark);
+  background-image: url("/sprites/tile-wood.svg");
+  background-size: 64px 64px;
+  image-rendering: pixelated;
+}
+
+/* the same plank at half scale, for thin strips */
+@utility bg-plank-fine {
+  background-color: var(--color-wood-dark);
+  background-image: url("/sprites/tile-wood.svg");
+  background-size: 32px 32px;
+  image-rendering: pixelated;
+}
+
+/* cork multiplied into wood so parchment cards pop. Never put text on it. */
+@utility bg-cork-board {
+  background-color: var(--color-wood);
+  background-image: url("/sprites/tile-cork.svg");
+  background-size: 64px 64px;
+  background-blend-mode: multiply;
+  image-rendering: pixelated;
+}
+
+/* faint ruled-paper lines on quest cards */
+@utility bg-ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    rgb(138 90 60 / 0.07) 27px,
+    rgb(138 90 60 / 0.07) 28px
+  );
+}

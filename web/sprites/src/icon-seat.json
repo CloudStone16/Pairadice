@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "k": "#120e1f",
+  "o": "#8a5a3c"
+ },
+ "rows": [
+  "................",
+  "................",
+  "....kkkkkkkk....",
+  "...kHHHHHHHHk...",
+  "..kHooooooooOk..",
+  ".kHoooooooooOOk.",
+  ".kOOOOOOOOOOOOk.",
+  "..kkOOkkkkOOkk..",
+  "...kOOkkkkOOk...",
+  "..kOOOOOOOOOOk..",
+  "..kOOkkkkkkOOk..",
+  ".kOOk......kOOk.",
+  ".kOOk......kOOk.",
+  "..kk........kk..",
+  "................",
+  "................"
+ ],
+ "notes": "empty wooden stool"
+}

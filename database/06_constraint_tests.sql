@@ -1,6 +1,8 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice constraint tests: every statement below MUST be rejected.
 -- Runs inside a transaction that is rolled back, so the data is unchanged afterwards.
--- Usage: mysql -u root -p < 06_constraint_tests.sql
+-- Usage: mysql --default-character-set=utf8mb4 -u root -p < 06_constraint_tests.sql
 USE pairadice;
 
 DROP PROCEDURE IF EXISTS t_expect_error;
@@ -51,6 +53,20 @@ CALL t_expect_error('NOT NULL: outbox row without id',    "INSERT INTO embedding
 CALL t_expect_error('PK: outbox duplicate entity row',    "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES ('player', 1, 'upsert'), ('player', 1, 'delete')");
 CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
 CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
+-- ---- encoding / UTC / web-role guards.
+-- Probe pattern: "INSERT ... SELECT 'en', ... WHERE <healthy condition>" collides with the existing language 'en'
+-- (duplicate PK) only when the condition holds, so the probe is REJECTED (= PASS) when the database is healthy
+-- and silently inserts nothing (= FAIL, 'accepted') when it is not. Nothing is ever written.
+CALL t_expect_error('ENCODING: sofia_bw display_name is single-encoded UTF-8',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM users WHERE username = 'sofia_bw' AND HEX(display_name) = '536F66C3AD61')");
+CALL t_expect_error('ENCODING: Hindi and Japanese native names are single-encoded UTF-8',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM language WHERE language_code = 'hi' AND HEX(native_name) = 'E0A4B9E0A4BFE0A4A8E0A58DE0A4A6E0A580') AND EXISTS (SELECT 1 FROM language WHERE language_code = 'ja' AND HEX(native_name) = 'E697A5E69CACE8AA9E')");
+CALL t_expect_error('UTC: session time_zone is +00:00 and NOW() = UTC_TIMESTAMP()',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE @@session.time_zone = '+00:00' AND TIMESTAMPDIFF(SECOND, NOW(), UTC_TIMESTAMP()) = 0");
+CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT')");
+CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
 ROLLBACK;
 
 SELECT * FROM tmp_test_results;

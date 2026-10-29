@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "L": "#a094d6",
+  "c": "#f3ead3",
+  "e": "#f2a65a",
+  "k": "#120e1f",
+  "l": "#b4a7e8"
+ },
+ "rows": [
+  "...kkkkkkkkkk...",
+  "..kcccccccccck..",
+  ".kcllllllllllLk.",
+  "kcllllllllllllLk",
+  "kcllllllllllllLk",
+  "kcllllllllllllLk",
+  "kclllkllllklllLk",
+  "kclllkllllklllLk",
+  "kcllllllllllllLk",
+  "kcllllllllllllLk",
+  "kclelkllllklelLk",
+  "kcllllkkkkllllLk",
+  "kcllllllllllllLk",
+  ".kLllllllllllLk.",
+  "..kLLLLLLLLLLk..",
+  "...kkkkkkkkkk..."
+ ],
+ "notes": "favicon-size mascot"
+}

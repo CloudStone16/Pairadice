@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "c": "#f3ead3",
+  "k": "#120e1f",
+  "o": "#8a5a3c",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  ".........kkkk...",
+  "........kHHook..",
+  "...c...kHHooook.",
+  "....c.kHHooOoook",
+  "......kHooOoooOk",
+  "......kHooOoooOk",
+  "......kHooOoooOk",
+  "..ccc.kHooOooyOk",
+  "......kHooOoooOk",
+  "......kHooOoooOk",
+  "......kHooOoooOk",
+  "....c.kHooOoooOk",
+  "...c..kOOOOOOOOk",
+  ".......kkkkkkkk.",
+  "................"
+ ],
+ "notes": "door with knock marks"
+}

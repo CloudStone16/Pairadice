@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "Y": "#c99a3a",
+  "k": "#120e1f",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  ".......kk.......",
+  "......kyyk......",
+  ".....kyyyyk.....",
+  ".....kywyyk.....",
+  ".kkkkyywyyYkkkk.",
+  "kyyyyyyyyyyyyyYk",
+  ".kyyywyyyyyyYYk.",
+  "..kyyyyyyyyYYk..",
+  "...kyyyyyyyYk...",
+  "...kyyyyyyYYk...",
+  "..kyyyyYYyyyYk..",
+  "..kyyyYkkYyyyk..",
+  ".kyyyYk..kYyyyk.",
+  ".kyyYk....kYyyk.",
+  "..kkk......kkk..",
+  "................"
+ ],
+ "notes": "rating star"
+}

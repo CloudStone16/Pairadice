@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice sample queries: joins, nested, correlated, recursive CTEs, windows, procedures.
 -- Read-only (except the CALLs with p_log = FALSE, which also write nothing). Run after 03_seed.sql.
 USE pairadice;

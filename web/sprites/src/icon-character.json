@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "B": "#4a6fc0",
+  "a": "#efe2c4",
+  "b": "#6a95e6",
+  "k": "#120e1f",
+  "o": "#8a5a3c"
+ },
+ "rows": [
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  "kaaaaaakkaaaaaak",
+  "kabbbbbbaoooooAk",
+  "kabbBBbbaaaaaaAk",
+  "kabbBBbbaoooaaAk",
+  "kabBBBBbaaaaaaAk",
+  "kaBBBBBBaoooooAk",
+  "kabbbbbbaaaaaaAk",
+  "kaaaaaaaaaaaaaAk",
+  "kaooooooaaaaaaAk",
+  "kAAAAAAAAAAAAAAk",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "character / ID card"
+}

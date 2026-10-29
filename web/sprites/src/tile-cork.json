@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "N": "#a0693f",
+  "a": "#efe2c4",
+  "z": "#d9aa7c"
+ },
+ "rows": [
+  "AAAAAAAAAAAAAAAA",
+  "AAaAAAAaAAAAAaAA",
+  "AaAAAAAaAAAAAAaA",
+  "AAaAaAAAAAAAAAAA",
+  "AAAAAAAAANzAAAAA",
+  "AANzAAAaAzAAAaAA",
+  "ANzAAAAAAAAAAAAA",
+  "AAzaAAAAAAAAAAAA",
+  "AANAAAAAAAAAAAAA",
+  "AAAANAAAAAAAAAaA",
+  "AAzAAAAAAAAAANAA",
+  "AAAaAAzAAAAAzAzA",
+  "AzAAAAANzAAAAAAA",
+  "AANAAAAAAAAAAAAA",
+  "AAAAAAAAAzAAAAAA",
+  "AAANzAaAAzAaNzAA"
+ ],
+ "notes": "cork board texture, seamless"
+}

@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "a": "#efe2c4",
+  "k": "#120e1f",
+  "o": "#8a5a3c"
+ },
+ "rows": [
+  "..kkkkkkkkkkkk..",
+  ".kAAAAAAAAAAAAk.",
+  "kAaaaaaaaaaaaaAk",
+  ".kAAAAAAAAAAAAk.",
+  ".kaaaaaaaaaaaAk.",
+  ".kaooooooooaaAk.",
+  ".kaaaaaaaaaaaAk.",
+  ".kaooooooooooAk.",
+  ".kaaaaaaaaaaaAk.",
+  ".kaoooooaaaaaAk.",
+  ".kaaaaaaaaaaaAk.",
+  ".kAAAAAAAAAAAAk.",
+  "kAaaaaaaaaaaaaAk",
+  ".kAAAAAAAAAAAAk.",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "scroll"
+}

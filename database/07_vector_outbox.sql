@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice vector-store sync: triggers that queue MongoDB re-embeds in embedding_outbox.
 -- Run after 02_routines.sql (setup.sh loads it after 04). Safe to re-run: every object is dropped first.
 -- The Node worker (vector/scripts/worker.js) drains the queue into MongoDB.
