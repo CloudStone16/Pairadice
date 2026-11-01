@@ -8,8 +8,8 @@ let client;
 
 export function sql() {
   if (!pool) {
-    if (config.mysql.password === undefined) {
-      throw new Error('Set MYSQL_PWD (and MYSQL_USER if not root) in the environment; credentials are never stored in files.');
+    if (config.mysql.password === undefined && !config.mysql.socketPath) {
+      throw new Error('Set MYSQL_PWD or MYSQL_SOCKET (and MYSQL_USER if not root) in the environment; credentials are never stored in files.');
     }
     // dateStrings keeps DATETIME(6) microseconds intact (outbox rows are matched on enqueued_at)
     pool = mysql.createPool({ ...config.mysql, dateStrings: true, decimalNumbers: true, connectionLimit: 4 });

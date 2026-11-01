@@ -7,6 +7,7 @@ export const config = {
   mysql: {
     host: env.MYSQL_HOST ?? '127.0.0.1',
     port: Number(env.MYSQL_PORT ?? 3306),
+    socketPath: env.MYSQL_SOCKET, // set for a passwordless auth_socket login; takes precedence over host/port
     user: env.MYSQL_USER ?? 'root',
     password: env.MYSQL_PWD ?? env.MYSQL_PASSWORD,
     database: env.MYSQL_DATABASE ?? 'pairadice',
