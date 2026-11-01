@@ -10,6 +10,7 @@ MIN_VERSION="8.0.19"          # CHECK constraints (8.0.16) + INSERT ... AS alias
 MYSQL_USER="root"
 MYSQL_HOST="127.0.0.1"
 MYSQL_PORT="3306"
+MYSQL_SOCKET=""
 SEED=1
 RBAC=1
 VECTOR=1
@@ -30,7 +31,9 @@ Connection:
   -u, --user USER       MySQL admin user            (default: root)
   -h, --host HOST       MySQL host                  (default: 127.0.0.1)
   -P, --port PORT       MySQL port                  (default: 3306)
-  The password is read from \$MYSQL_PWD if set, otherwise prompted for (input hidden).
+  -S, --socket PATH     connect over this Unix socket instead of TCP, with no password
+                        (for an auth_socket login; --host and --port are ignored)
+  Over TCP the password is read from \$MYSQL_PWD if set, otherwise prompted for (input hidden).
 
 What to load:
       --no-seed         schema + routines only, no sample data
@@ -52,6 +55,7 @@ Examples:
   ./database/setup.sh --tests --samples
   ./database/setup.sh -u admin -h db.local -P 3307 --no-seed
   ./database/setup.sh -y --tests --web-user pd_web
+  ./database/setup.sh -u my_login -S /var/run/mysqld/mysqld.sock -y --tests
 
 Every mysql call runs with --default-character-set=utf8mb4 and time_zone='+00:00': all
 DATETIME columns are UTC and the .sql files are UTF-8. Connect your own clients the same way.
@@ -74,6 +78,7 @@ while [[ $# -gt 0 ]]; do
     -u|--user)       MYSQL_USER="${2:?missing value for $1}"; shift 2 ;;
     -h|--host)       MYSQL_HOST="${2:?missing value for $1}"; shift 2 ;;
     -P|--port)       MYSQL_PORT="${2:?missing value for $1}"; shift 2 ;;
+    -S|--socket)     MYSQL_SOCKET="${2:?missing value for $1}"; shift 2 ;;
     --no-seed)       SEED=0; shift ;;
     --no-rbac)       RBAC=0; shift ;;
     --no-vector)     VECTOR=0; shift ;;
@@ -103,18 +108,24 @@ for f in 01_schema.sql 02_routines.sql 03_seed.sql 04_rbac.sql 05_sample_queries
   [[ -f "$SCRIPT_DIR/$f" ]] || die "missing $SCRIPT_DIR/$f"
 done
 
-if [[ -z "${MYSQL_PWD+x}" ]]; then
-  read -r -s -p "MySQL password for ${MYSQL_USER}@${MYSQL_HOST}: " MYSQL_PWD
-  echo
+if [[ -n "$MYSQL_SOCKET" ]]; then
+  MYSQL_CONN=(--protocol=SOCKET -S "$MYSQL_SOCKET")
+  MYSQL_HOST="localhost"         # only used in messages from here on
+else
+  MYSQL_CONN=(--protocol=TCP -h "$MYSQL_HOST" -P "$MYSQL_PORT")
+  if [[ -z "${MYSQL_PWD+x}" ]]; then
+    read -r -s -p "MySQL password for ${MYSQL_USER}@${MYSQL_HOST}: " MYSQL_PWD
+    echo
+  fi
+  export MYSQL_PWD               # read by the mysql client; never placed on the command line
+  trap 'unset MYSQL_PWD' EXIT
 fi
-export MYSQL_PWD                 # read by the mysql client; never placed on the command line
-trap 'unset MYSQL_PWD' EXIT
 
 # utf8mb4: the .sql files are UTF-8; without it the client's latin1 default double-encodes non-ASCII text.
 # time_zone UTC: every DATETIME column is UTC, so CURRENT_TIMESTAMP / NOW() writes must be made in UTC.
 run_mysql() {
-  mysql --protocol=TCP --default-character-set=utf8mb4 --init-command="SET time_zone='+00:00'" \
-        -u "$MYSQL_USER" -h "$MYSQL_HOST" -P "$MYSQL_PORT" "$@"
+  mysql "${MYSQL_CONN[@]}" --default-character-set=utf8mb4 --init-command="SET time_zone='+00:00'" \
+        -u "$MYSQL_USER" "$@"
 }
 
 # ---------------------------------------------------------------- server reachable?

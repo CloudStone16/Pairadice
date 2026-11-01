@@ -111,5 +111,5 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_web_ro'
 --   GRANT 'pairadice_player' TO 'pd_api'@'localhost';
 --   SET DEFAULT ROLE 'pairadice_player' TO 'pd_api'@'localhost';
 -- or, for the read-only web app:  ./database/setup.sh --web-user pd_web
-
-SHOW GRANTS FOR 'pairadice_moderator' USING 'pairadice_player';
+-- To inspect a role (needs SELECT on the mysql schema):
+--   SHOW GRANTS FOR 'pairadice_moderator' USING 'pairadice_player';
