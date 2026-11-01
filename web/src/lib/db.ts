@@ -46,17 +46,19 @@ function readUser(): string {
 }
 
 function createPool(): Pool {
+  // MYSQL_SOCKET selects a passwordless auth_socket login; otherwise TCP with a password.
+  const socketPath = process.env.MYSQL_SOCKET;
   const password = process.env.MYSQL_PWD;
-  if (password === undefined || password === "") {
+  if (!socketPath && (password === undefined || password === "")) {
     throw new Error(
-      "MYSQL_PWD is not set. Export it in the shell before starting the app, e.g. `MYSQL_PWD=... bun run dev`. Credentials are never stored in files.",
+      "Neither MYSQL_SOCKET nor MYSQL_PWD is set. Export one in the shell before starting the app, e.g. `MYSQL_PWD=... bun run dev`. Credentials are never stored in files.",
     );
   }
   const pool = mysql.createPool({
-    host: process.env.MYSQL_HOST ?? "127.0.0.1",
-    port: readPort(),
+    ...(socketPath
+      ? { socketPath }
+      : { host: process.env.MYSQL_HOST ?? "127.0.0.1", port: readPort(), password }),
     user: readUser(),
-    password,
     database: process.env.MYSQL_DATABASE ?? "pairadice",
     charset: "utf8mb4_0900_ai_ci",
     timezone: "Z",
