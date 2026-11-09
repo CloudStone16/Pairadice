@@ -23,25 +23,43 @@ export function presenceExpr(alias: string): string {
 export const USER_COLS = `u.user_id, u.username, u.display_name, u.timezone, u.trust_score,
   ${presenceExpr("u")} AS presence`;
 
+/** A SQL fragment plus the values for its `?` placeholders. */
+export interface SqlPart {
+  sql: string;
+  params: number[];
+}
+
 /**
- * Session visibility for a viewer (3 placeholders, all = viewer id).
- * Expects the lfg_session alias `s` in scope.
+ * Session visibility for a viewer. Expects the lfg_session alias `s` in scope.
+ * Anonymous (null) sees public sessions only and never touches friendship.
  */
-export const VISIBLE_TO_VIEWER = `(s.visibility = 'public' OR s.host_id = ?
+export function visibleToViewer(viewerId: number | null): SqlPart {
+  if (viewerId === null) return { sql: `(s.visibility = 'public')`, params: [] };
+  return {
+    sql: `(s.visibility = 'public' OR s.host_id = ?
   OR (s.visibility = 'friends' AND EXISTS (
         SELECT 1 FROM friendship f
          WHERE f.status = 'accepted'
-           AND f.pair_low = LEAST(?, s.host_id) AND f.pair_high = GREATEST(?, s.host_id))))`;
+           AND f.pair_low = LEAST(?, s.host_id) AND f.pair_high = GREATEST(?, s.host_id))))`,
+    params: [viewerId, viewerId, viewerId],
+  };
+}
 
 /**
- * Whether a viewer may open a camp page (4 placeholders, all = viewer id):
- * visible to them, or they are in the roster (accepted / requested), which is
- * how invite-only camps reach their guests. Expects alias `s`.
+ * Whether a viewer may open a camp page: visible to them, or they are in the roster (accepted /
+ * requested), which is how invite-only camps reach their guests. Expects alias `s`.
  */
-export const CAN_VIEW_CAMP = `(${VISIBLE_TO_VIEWER}
+export function canViewCamp(viewerId: number | null): SqlPart {
+  if (viewerId === null) return visibleToViewer(null);
+  const vis = visibleToViewer(viewerId);
+  return {
+    sql: `(${vis.sql}
   OR EXISTS (SELECT 1 FROM v_session_roster rv
               WHERE rv.session_id = s.session_id AND rv.user_id = ?
-                AND rv.status IN ('accepted', 'requested')))`;
+                AND rv.status IN ('accepted', 'requested')))`,
+    params: [...vis.params, viewerId],
+  };
+}
 
 /**
  * Excludes users blocked in either direction (2 placeholders, both = viewer id).

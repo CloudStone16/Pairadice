@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/hearth/EmptyState";
 import { QuestGrid } from "@/components/hearth/QuestGrid";
 import { SignInGate } from "@/components/hearth/SignInGate";
 import { ButtonLink, Chip, Sprite, Window } from "@/components/ui";
+import { getViewer } from "@/lib/auth/viewer";
 import { cartSprite } from "@/lib/format";
 import { resolveGame, resolveMode } from "@/lib/slugs";
 import { OPEN_QUEST_LIMIT, getCurrentUser, getGames, getModes, getOpenQuests } from "@/lib/queries";
@@ -12,13 +13,13 @@ import { OPEN_QUEST_LIMIT, getCurrentUser, getGames, getModes, getOpenQuests } f
 type Params = { slug?: string[] };
 
 async function resolveSelection(slug: string[]) {
-  const user = await getCurrentUser();
-  if (!user) return null;
-  const [games, modes] = await Promise.all([getGames(user.user_id), getModes()]);
+  const [user, viewer] = await Promise.all([getCurrentUser(), getViewer()]);
+  if (!user || !viewer) return null;
+  const [games, modes] = await Promise.all([getGames(viewer), getModes()]);
   const game = resolveGame(games, slug[0]);
   const gameModes = game ? modes.filter((m) => m.game_id === game.game_id) : [];
   const mode = resolveMode(gameModes, slug[1]);
-  return { user, game, gameModes, mode };
+  return { user, viewer, game, gameModes, mode };
 }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -47,11 +48,11 @@ export default async function BoardPage({ params }: { params: Promise<Params> })
 
   const sel = await resolveSelection(slug);
   if (!sel) return <SignInGate />;
-  const { user, game, gameModes, mode } = sel;
+  const { user, viewer, game, gameModes, mode } = sel;
   if (slug[0] && !game) notFound();
   if (slug[1] && !mode) notFound();
 
-  const quests = await getOpenQuests(user.user_id, { gameId: game?.game_id, modeId: mode?.mode_id });
+  const quests = await getOpenQuests(viewer, { gameId: game?.game_id, modeId: mode?.mode_id });
   const heading = mode ? `${game?.name} · ${mode.name}` : (game?.name ?? "Quest Board");
   const count = quests.length >= OPEN_QUEST_LIMIT ? `${OPEN_QUEST_LIMIT}+` : String(quests.length);
 

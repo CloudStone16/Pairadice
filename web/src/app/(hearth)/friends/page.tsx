@@ -20,7 +20,7 @@ export default async function FriendsPage({ searchParams }: { searchParams: Prom
 
   const [overviewRes, lists, found] = await Promise.all([
     getFriendOverview(viewer),
-    getFriendLists(viewer.userId),
+    getFriendLists(viewer),
     searchPlayers(q, viewer),
   ]);
   const overview = overviewRes.ok ? overviewRes.value : EMPTY;

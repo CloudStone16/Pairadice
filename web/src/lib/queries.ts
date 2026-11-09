@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import { callProc, query, type SqlParam } from "@/lib/db";
+import { callProcAs, query, queryAs, type SqlParam } from "@/lib/db";
+import type { DbLogin } from "@/lib/db-roles";
+import { readCtx, type ViewerRef } from "@/lib/read-login";
 import { getViewer } from "@/lib/auth/viewer";
 import { isDevAuthEnabled } from "@/lib/dev-user";
 import { splitList } from "@/lib/format";
@@ -8,11 +10,11 @@ import { assignModeSlugs, type ModeRow } from "@/lib/slugs";
 import {
   NOT_LONG_PAST,
   USER_COLS,
-  VISIBLE_TO_VIEWER,
   bool,
   notBlockedWith,
   presenceExpr,
   str,
+  visibleToViewer,
 } from "@/lib/sql-parts";
 import type {
   DmThread,
@@ -27,6 +29,8 @@ import type {
 } from "@/lib/types";
 
 // READ-ONLY data layer: SELECT statements plus `CALL sp_recommend_sessions(?, ?, FALSE)`.
+// Viewer-dependent reads take a ViewerRef and run through the viewer's own DB login (see read-login.ts).
+// Anonymous reads use "web" and never touch message, friendship, user_block or sp_recommend_sessions.
 // Sources: v_open_sessions, v_session_roster, v_player_card, game, game_mode,
 // rank_tier, game_role, lfg_session, session_slot, session_language, session_tag,
 // tag, friendship, user_block, message, geo_region, player_game_profile,
@@ -69,16 +73,19 @@ export const getAllUsers = cache(async (): Promise<Array<{ user_id: number; user
 });
 
 // ---------------------------------------------------------------- games
-export const getGames = cache(async (viewerId: number): Promise<GameInfo[]> => {
-  return query<GameInfo>(
+export const getGames = cache(async (ref: ViewerRef): Promise<GameInfo[]> => {
+  const { login, viewerId } = await readCtx(ref);
+  const vis = visibleToViewer(viewerId);
+  return queryAs<GameInfo>(
+    login,
     `SELECT g.game_id, g.name, g.slug,
             (SELECT COUNT(*) FROM lfg_session s
                JOIN users h ON h.user_id = s.host_id AND h.status = 'active'
-              WHERE s.game_id = g.game_id AND s.status = 'open' AND ${NOT_LONG_PAST} AND ${VISIBLE_TO_VIEWER}) AS open_count
+              WHERE s.game_id = g.game_id AND s.status = 'open' AND ${NOT_LONG_PAST} AND ${vis.sql}) AS open_count
        FROM game g
       WHERE g.is_active = TRUE
       ORDER BY g.name`,
-    [viewerId, viewerId, viewerId],
+    vis.params,
   );
 });
 
@@ -140,14 +147,16 @@ export interface QuestFilter {
   modeId?: number;
 }
 
-/** Open quests visible to `viewerId`, soonest first (unscheduled last), capped at OPEN_QUEST_LIMIT. */
-export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}): Promise<Quest[]> {
+/** Open quests visible to the viewer, soonest first (unscheduled last), capped at OPEN_QUEST_LIMIT. */
+export async function getOpenQuests(ref: ViewerRef, filter: QuestFilter = {}): Promise<Quest[]> {
+  const { login, viewerId } = await readCtx(ref);
+  const vis = visibleToViewer(viewerId);
   const where = [
     `EXISTS (SELECT 1 FROM users h WHERE h.user_id = s.host_id AND h.status = 'active')`,
     NOT_LONG_PAST,
-    VISIBLE_TO_VIEWER,
+    vis.sql,
   ];
-  const params: SqlParam[] = [viewerId, viewerId, viewerId];
+  const params: SqlParam[] = [...vis.params];
   if (filter.gameId !== undefined) {
     where.push("s.game_id = ?");
     params.push(filter.gameId);
@@ -156,7 +165,8 @@ export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}):
     where.push("s.mode_id = ?");
     params.push(filter.modeId);
   }
-  const rows = await query<QuestRow>(
+  const rows = await queryAs<QuestRow>(
+    login,
     `${QUEST_SELECT}
       WHERE ${where.join(" AND ")}
       ORDER BY (s.scheduled_start IS NULL), s.scheduled_start, s.session_id
@@ -166,9 +176,11 @@ export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}):
   return rows.map(toQuest);
 }
 
-export async function getQuestsByIds(ids: number[]): Promise<Quest[]> {
+/** Quests by id (no visibility filter: ids come from sp_recommend_sessions). Read through the viewer's login. */
+export async function getQuestsByIds(ids: number[], ref: ViewerRef = null): Promise<Quest[]> {
   if (ids.length === 0) return [];
-  const rows = await query<QuestRow>(`${QUEST_SELECT} WHERE s.session_id IN (?)`, [ids]);
+  const { login } = await readCtx(ref);
+  const rows = await queryAs<QuestRow>(login, `${QUEST_SELECT} WHERE s.session_id IN (?)`, [ids]);
   return rows.map(toQuest);
 }
 
@@ -177,9 +189,9 @@ interface RecRow extends QuestFit {
 }
 
 /** Top 5 matches from sp_recommend_sessions (p_log = FALSE: nothing is written). Cached per request. */
-export const getRecommendedQuests = cache(async (userId: number): Promise<Quest[]> => {
+export const getRecommendedQuests = cache(async (ref: ViewerRef): Promise<Quest[]> => {
   try {
-    return await loadRecommendedQuests(userId);
+    return await loadRecommendedQuests(ref);
   } catch (err) {
     // A failing procedure must never take the whole site down; the UI shows its empty state.
     console.error("[pairadice] sp_recommend_sessions failed:", err);
@@ -187,9 +199,14 @@ export const getRecommendedQuests = cache(async (userId: number): Promise<Quest[
   }
 });
 
-async function loadRecommendedQuests(userId: number): Promise<Quest[]> {
-  const recs = await callProc<RecRow>("CALL sp_recommend_sessions(?, ?, FALSE)", [userId, 5]);
-  const quests = await getQuestsByIds(recs.map((r) => r.session_id));
+async function loadRecommendedQuests(ref: ViewerRef): Promise<Quest[]> {
+  const { login, viewerId } = await readCtx(ref);
+  if (viewerId === null) return []; // anonymous: no recommendations, and the web login cannot EXECUTE the procedure
+  const recs = await callProcAs<RecRow>(login, "CALL sp_recommend_sessions(?, ?, FALSE)", [viewerId, 5]);
+  const quests = await getQuestsByIds(
+    recs.map((r) => r.session_id),
+    ref,
+  );
   const byId = new Map(quests.map((q) => [q.session_id, q]));
   const out: Quest[] = [];
   for (const r of recs) {
@@ -212,6 +229,7 @@ async function loadRecommendedQuests(userId: number): Promise<Quest[]> {
 
 // ---------------------------------------------------------------- friends
 async function friendRows(
+  login: Exclude<DbLogin, "auth">,
   userId: number,
   status: "accepted" | "pending",
   direction: "any" | "in" | "out",
@@ -225,7 +243,8 @@ async function friendRows(
   const params: SqlParam[] = [userId, status, userId];
   if (direction === "any") params.push(userId);
   params.push(userId, userId); // notBlockedWith(u)
-  return query<UserRow>(
+  return queryAs<UserRow>(
+    login,
     `SELECT ${USER_COLS}
        FROM friendship f
        JOIN users u ON u.user_id = IF(f.requester_id = ?, f.addressee_id, f.requester_id)
@@ -236,11 +255,13 @@ async function friendRows(
   );
 }
 
-export const getFriendLists = cache(async (userId: number): Promise<FriendLists> => {
+export const getFriendLists = cache(async (ref: ViewerRef): Promise<FriendLists> => {
+  const { login, viewerId } = await readCtx(ref);
+  if (viewerId === null) return { accepted: [], incoming: [], outgoing: [] };
   const [accepted, incoming, outgoing] = await Promise.all([
-    friendRows(userId, "accepted", "any"),
-    friendRows(userId, "pending", "in"),
-    friendRows(userId, "pending", "out"),
+    friendRows(login, viewerId, "accepted", "any"),
+    friendRows(login, viewerId, "pending", "in"),
+    friendRows(login, viewerId, "pending", "out"),
   ]);
   return { accepted, incoming, outgoing };
 });
@@ -259,8 +280,11 @@ interface DmRow {
 }
 
 /** Latest DM per conversation partner, newest first (max 5). */
-export async function getRecentDms(userId: number): Promise<DmThread[]> {
-  const rows = await query<DmRow>(
+export async function getRecentDms(ref: ViewerRef): Promise<DmThread[]> {
+  const { login, viewerId: userId } = await readCtx(ref);
+  if (userId === null) return []; // anonymous: the web login cannot read message
+  const rows = await queryAs<DmRow>(
+    login,
     `SELECT t.message_id, t.other_id, u.username AS other_username, u.display_name AS other_display_name,
             ${presenceExpr("u")} AS other_presence,
             t.sender_id, IF(t.is_deleted, NULL, t.content) AS content, t.is_deleted, t.sent_at

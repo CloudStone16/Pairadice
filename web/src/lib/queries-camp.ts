@@ -3,7 +3,8 @@ import { cache } from "react";
 import { query, queryAs } from "@/lib/db";
 import type { Viewer } from "@/lib/auth/viewer";
 import { writeLoginFor } from "@/lib/auth/session";
-import { CAN_VIEW_CAMP, bool, str } from "@/lib/sql-parts";
+import { readCtx, type ViewerRef } from "@/lib/read-login";
+import { bool, canViewCamp, str } from "@/lib/sql-parts";
 import type {
   Camp,
   ChatMessage,
@@ -39,8 +40,11 @@ interface CampRow extends Omit<Camp, "region_locked" | "voice_required" | "min_a
  * viewer may not see it (friends-only / invite-only without access). Invited
  * guests get in only while their roster status is accepted or requested.
  */
-export const getCamp = cache(async (sessionId: number, viewerId: number): Promise<Camp | null> => {
-  const rows = await query<CampRow>(
+export const getCamp = cache(async (sessionId: number, ref: ViewerRef): Promise<Camp | null> => {
+  const { login, viewerId } = await readCtx(ref);
+  const view = canViewCamp(viewerId);
+  const rows = await queryAs<CampRow>(
+    login,
     `SELECT s.session_id, s.title, s.description, s.status, s.max_players, s.current_players,
             s.scheduled_start, s.region_locked, s.voice_required, s.visibility, s.join_policy,
             s.min_avg_rating, s.discord_invite_url, s.host_id,
@@ -55,8 +59,8 @@ export const getCamp = cache(async (sessionId: number, viewerId: number): Promis
        LEFT JOIN geo_region r   ON r.region_id = s.region_id
        LEFT JOIN rank_tier minr ON minr.rank_id = s.min_rank_id
        LEFT JOIN rank_tier maxr ON maxr.rank_id = s.max_rank_id
-      WHERE s.session_id = ? AND ${CAN_VIEW_CAMP}`,
-    [sessionId, viewerId, viewerId, viewerId, viewerId],
+      WHERE s.session_id = ? AND ${view.sql}`,
+    [sessionId, ...view.params],
   );
   const r = rows[0];
   if (!r) return null;
@@ -73,8 +77,11 @@ export const getCamp = cache(async (sessionId: number, viewerId: number): Promis
  * True when the viewer is the host or an accepted participant of the camp.
  * Only these viewers may see gamertags and the chat log.
  */
-export const isCampMember = cache(async (sessionId: number, viewerId: number): Promise<boolean> => {
-  const rows = await query<{ is_member: unknown }>(
+export const isCampMember = cache(async (sessionId: number, ref: ViewerRef): Promise<boolean> => {
+  const { login, viewerId } = await readCtx(ref);
+  if (viewerId === null) return false;
+  const rows = await queryAs<{ is_member: unknown }>(
+    login,
     `SELECT EXISTS (
               SELECT 1 FROM lfg_session s
                WHERE s.session_id = ?
@@ -97,9 +104,12 @@ interface RosterRow extends Omit<RosterEntry, "gamertag" | "identity_label"> {
  * Everyone on a camp's roster. Empty when the viewer may not see the camp;
  * gamertags / identity labels are filled in only for members viewing accepted seats.
  */
-export async function getRoster(sessionId: number, viewerId: number): Promise<RosterEntry[]> {
-  const member = (await isCampMember(sessionId, viewerId)) ? 1 : 0;
-  const rows = await query<RosterRow>(
+export async function getRoster(sessionId: number, ref: ViewerRef): Promise<RosterEntry[]> {
+  const { login, viewerId } = await readCtx(ref);
+  const member = (await isCampMember(sessionId, ref)) ? 1 : 0;
+  const view = canViewCamp(viewerId);
+  const rows = await queryAs<RosterRow>(
+    login,
     `SELECT r.user_id, r.username, u.display_name, r.status, r.game_role,
             CASE WHEN ? = 1 AND r.status = 'accepted' THEN r.gamertag ELSE NULL END AS gamertag,
             CASE WHEN ? = 1 AND r.status = 'accepted' THEN r.identity_label ELSE NULL END AS identity_label,
@@ -107,9 +117,9 @@ export async function getRoster(sessionId: number, viewerId: number): Promise<Ro
        FROM v_session_roster r
        JOIN users u ON u.user_id = r.user_id
        JOIN lfg_session s ON s.session_id = r.session_id
-      WHERE r.session_id = ? AND ${CAN_VIEW_CAMP}
+      WHERE r.session_id = ? AND ${view.sql}
       ORDER BY r.joined_at, r.user_id`,
-    [member, member, sessionId, viewerId, viewerId, viewerId, viewerId],
+    [member, member, sessionId, ...view.params],
   );
   return rows.map((r) => ({ ...r, gamertag: str(r.gamertag), identity_label: str(r.identity_label) }));
 }
@@ -205,9 +215,12 @@ interface ChatRow extends Omit<ChatMessage, "is_deleted"> {
  * The latest CHAT_LIMIT chat lines, oldest first. Returns null (locked) unless
  * the viewer is the host or an accepted participant. Deleted bodies are never fetched.
  */
-export async function getSessionChat(sessionId: number, viewerId: number): Promise<ChatMessage[] | null> {
-  if (!(await isCampMember(sessionId, viewerId))) return null;
-  const rows = await query<ChatRow>(
+export async function getSessionChat(sessionId: number, ref: ViewerRef): Promise<ChatMessage[] | null> {
+  const { login, viewerId } = await readCtx(ref);
+  // anonymous never reaches message: the web login has no SELECT on it
+  if (viewerId === null || !(await isCampMember(sessionId, ref))) return null;
+  const rows = await queryAs<ChatRow>(
+    login,
     `SELECT t.message_id, t.sender_id, t.username, t.display_name, t.content, t.is_deleted, t.sent_at, t.edited_at
        FROM (
          SELECT m.message_id, m.sender_id, u.username, u.display_name,
@@ -231,8 +244,11 @@ type PartyRow = Omit<PartyEntry, "role"> & {
 };
 
 /** Sessions the user hosts, is accepted in, or has requested to join (max PARTY_LIMIT). */
-export async function getMyParty(userId: number): Promise<PartyEntry[]> {
-  const rows = await query<PartyRow>(
+export async function getMyParty(ref: ViewerRef): Promise<PartyEntry[]> {
+  const { login, viewerId: userId } = await readCtx(ref);
+  if (userId === null) return [];
+  const rows = await queryAs<PartyRow>(
+    login,
     `SELECT s.session_id, s.title, s.status, s.host_id, s.scheduled_start, s.current_players, s.max_players,
             g.name AS game, g.slug AS game_slug, gm.name AS game_mode, r.status AS my_status
        FROM lfg_session s

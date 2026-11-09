@@ -13,7 +13,7 @@ import { getHybridRecommendations } from "@/lib/recommend";
 export const metadata: Metadata = { title: "Hearth | PairADice" };
 
 /** Recommendations and recent DMs stream in behind their own Suspense boundary. */
-async function HearthFeed({ userId, timeZone }: { userId: number; timeZone: string }) {
+async function HearthFeed({ timeZone }: { timeZone: string }) {
   const viewer = await getViewer();
   const [quests, dms] = await Promise.all([
     viewer
@@ -23,7 +23,7 @@ async function HearthFeed({ userId, timeZone }: { userId: number; timeZone: stri
           return [];
         })
       : [],
-    getRecentDms(userId),
+    getRecentDms(viewer),
   ]);
   return (
     <>
@@ -83,7 +83,7 @@ export default async function HearthPage() {
       </Window>
 
       <Suspense fallback={<ListSkeleton />}>
-        <HearthFeed userId={user.user_id} timeZone={user.timezone} />
+        <HearthFeed timeZone={user.timezone} />
       </Suspense>
     </div>
   );

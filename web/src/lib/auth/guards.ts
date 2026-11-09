@@ -1,6 +1,7 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
 import type { AppRole } from "../db-roles";
+import { safeNextOrNull } from "./safe-next";
 import { getViewer, type Viewer } from "./viewer";
 
 export { getViewer, type Viewer } from "./viewer";
@@ -16,7 +17,7 @@ export function hasRole(viewer: Pick<Viewer, "roles">, role: AppRole): boolean {
 export async function requireViewer(nextPath?: string): Promise<Viewer> {
   const viewer = await getViewer();
   if (!viewer) {
-    const safe = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : null;
+    const safe = safeNextOrNull(nextPath);
     redirect(safe ? `/sign-in?next=${encodeURIComponent(safe)}` : "/sign-in");
   }
   return viewer;

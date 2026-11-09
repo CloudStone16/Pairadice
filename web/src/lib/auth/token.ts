@@ -33,3 +33,8 @@ export function newRawToken(): string {
 export function hashToken(raw: string): Buffer {
   return createHmac("sha256", authSecret()).update(raw).digest();
 }
+
+/** True for a well-formed raw token (43 base64url characters); anything else cannot be a session. */
+export function isValidRawToken(raw: string | null | undefined): raw is string {
+  return typeof raw === "string" && /^[A-Za-z0-9_-]{43}$/.test(raw);
+}

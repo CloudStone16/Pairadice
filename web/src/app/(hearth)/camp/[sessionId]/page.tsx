@@ -39,9 +39,9 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (id === null) notFound();
   let camp = null;
   try {
-    const user = await getCurrentUser();
-    if (!user) return { title: "Camp | PairADice" };
-    camp = await getCamp(id, user.user_id);
+    const viewer = await getViewer();
+    if (!viewer) return { title: "Camp | PairADice" };
+    camp = await getCamp(id, viewer);
   } catch {
     // the page itself reports the real error; use the generic title meanwhile
     return { title: "Camp | PairADice" };
@@ -56,27 +56,26 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
   const id = parseId(sessionId);
   if (id === null) notFound();
 
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
+  const [user, viewer] = await Promise.all([getCurrentUser(), getViewer()]);
+  if (!user || !viewer) return <SignInGate />;
 
   // Resolve existence first (a real 404 must happen before anything streams), then fetch the
   // rest in one round trip. getRoster and getSessionChat enforce visibility and membership themselves.
-  const camp = await getCamp(id, user.user_id);
+  const camp = await getCamp(id, viewer);
   if (!camp) notFound();
   // a suspended or banned host pauses the camp: nothing else about it is fetched or rendered
   if (isPaused(camp.host_status)) return <CampPaused />;
 
-  const viewer = await getViewer();
   // best effort and not awaited: logging a view must never slow or fail the page
-  if (viewer) void markRecommendationOutcome(viewer, id, "viewed");
+  void markRecommendationOutcome(viewer, id, "viewed");
 
   const [roster, needs, languages, tags, chat, isMember] = await Promise.all([
-    getRoster(id, user.user_id),
+    getRoster(id, viewer),
     getSlotNeeds(id),
     getSessionLanguages(id),
     getSessionTags(id),
-    getSessionChat(id, user.user_id),
-    isCampMember(id, user.user_id),
+    getSessionChat(id, viewer),
+    isCampMember(id, viewer),
   ]);
   const role: ViewerRole =
     camp.host_id === user.user_id
@@ -87,10 +86,10 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
           ? "knocking"
           : "none";
   const canJoin = role === "none" && camp.status === "open";
-  const [joinRoles, accounts] = canJoin && viewer
+  const [joinRoles, accounts] = canJoin
     ? await Promise.all([getJoinRoles(id), getMyPlatformAccounts(viewer, id)])
     : [[], []];
-  const canManage = role === "host" || (viewer !== null && hasRole(viewer, "moderator"));
+  const canManage = role === "host" || hasRole(viewer, "moderator");
   const invite =
     isMember && camp.discord_invite_url && /^https?:\/\//i.test(camp.discord_invite_url)
       ? camp.discord_invite_url

@@ -343,16 +343,23 @@ async function setStatus(viewer: Viewer, userId: number, status: "banned" | "act
   const res = unwrap(
     await runAsViewer(viewer, async (login): Promise<LabResult> => {
       const conn = await poolFor(login).getConnection();
+      let discard = false; // a connection whose @audit_actor could not be cleared must not be reused
       try {
         // the audit trigger reads @audit_actor from this same connection
         await conn.query("SET @audit_actor = ?", [viewer.userId]);
         try {
           await conn.query("UPDATE users SET status = ? WHERE user_id = ?", [status, userId]);
         } finally {
-          await conn.query("SET @audit_actor = NULL");
+          await conn.query("SET @audit_actor = NULL").catch(() => {
+            discard = true;
+          });
         }
+      } catch (err) {
+        discard = true;
+        throw err;
       } finally {
-        conn.release();
+        if (discard) conn.destroy();
+        else conn.release();
       }
       return {
         ok: true,

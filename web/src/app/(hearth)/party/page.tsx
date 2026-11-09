@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { PartyGroups } from "@/components/hearth/PartyGroups";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { getViewer } from "@/lib/auth/viewer";
 import { getCurrentUser, getMyParty } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "My Party | PairADice" };
 
 export default async function PartyPage() {
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
-  const entries = await getMyParty(user.user_id);
+  const [user, viewer] = await Promise.all([getCurrentUser(), getViewer()]);
+  if (!user || !viewer) return <SignInGate />;
+  const entries = await getMyParty(viewer);
   return (
     <div className="flex flex-col gap-8">
       <header>

@@ -32,3 +32,8 @@ export function writeLoginForRoles(roles: readonly AppRole[]): Exclude<DbLogin, 
   if (roles.includes("player")) return "player";
   return null;
 }
+
+/** The login a signed-in viewer's reads use: the same mapping as writes. No role at all means "web" (anonymous). */
+export function readLoginForRoles(roles: readonly AppRole[]): Exclude<DbLogin, "auth"> {
+  return writeLoginForRoles(roles) ?? "web";
+}

@@ -1,5 +1,6 @@
 import "server-only";
-import { query, queryAs, type SqlParam } from "@/lib/db";
+import { queryAs, type SqlParam } from "@/lib/db";
+import { readCtx, type ViewerRef } from "@/lib/read-login";
 import { runAsViewer, type ActionResult } from "@/lib/mutations/run";
 import type { Viewer } from "@/lib/auth/viewer";
 import { USER_COLS, notBlockedWith } from "@/lib/sql-parts";
@@ -73,9 +74,12 @@ function likePrefix(term: string): string {
 export async function searchPlayers(term: string, viewer: Viewer): Promise<UserLite[]> {
   const t = term.trim().slice(0, 40);
   if (t.length < 2) return [];
+  const { login, viewerId } = await readCtx(viewer);
+  if (viewerId === null) return [];
   const like = likePrefix(t);
-  const params: SqlParam[] = [viewer.userId, like, like, viewer.userId, viewer.userId];
-  return query<UserLite>(
+  const params: SqlParam[] = [viewerId, like, like, viewerId, viewerId];
+  return queryAs<UserLite>(
+    login,
     `SELECT ${USER_COLS}
        FROM users u
       WHERE u.status = 'active' AND u.user_id <> ?
@@ -84,5 +88,24 @@ export async function searchPlayers(term: string, viewer: Viewer): Promise<UserL
       ORDER BY u.display_name, u.user_id
       LIMIT 10`,
     params,
+  );
+}
+
+/**
+ * Of `ids`, the active players the viewer may be shown: not blocked in either direction. Signed-out
+ * (or role-less) viewers get []: the web login cannot read user_block.
+ */
+export async function filterVisiblePlayers(
+  ref: ViewerRef,
+  ids: readonly number[],
+): Promise<Array<{ user_id: number; username: string; display_name: string }>> {
+  const { login, viewerId } = await readCtx(ref);
+  if (viewerId === null || ids.length === 0) return [];
+  return queryAs<{ user_id: number; username: string; display_name: string }>(
+    login,
+    `SELECT u.user_id, u.username, u.display_name
+       FROM users u
+      WHERE u.user_id IN (?) AND u.status = 'active' AND ${notBlockedWith("u")}`,
+    [[...ids], viewerId, viewerId],
   );
 }

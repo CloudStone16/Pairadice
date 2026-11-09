@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import type { Viewer } from "./auth/viewer";
 import { writeLoginFor } from "./auth/session";
-import { callProc, execAs, queryAs } from "./db";
+import { callProcAs, execAs, queryAs } from "./db";
+import { readCtx } from "./read-login";
 import { getQuestsByIds } from "./queries";
 import type { Quest, QuestFit } from "./types";
 import { blend, sessionSimilarities, type Blended } from "./vector/search";
@@ -45,7 +46,10 @@ function warnOnce(reason: unknown): void {
 }
 
 async function rank(viewer: Viewer): Promise<Ranked> {
-  const rules = await callProc<RuleRow>("CALL sp_recommend_sessions(?, ?, FALSE)", [viewer.userId, CANDIDATES]);
+  // anonymous (no role login) never calls the procedure
+  const { login, viewerId } = await readCtx(viewer);
+  if (viewerId === null) return { source: "sql", rows: [] };
+  const rules = await callProcAs<RuleRow>(login, "CALL sp_recommend_sessions(?, ?, FALSE)", [viewerId, CANDIDATES]);
   const sqlOnly = (): Ranked => ({
     source: "sql",
     rows: rules.map((row) => ({ row, breakdown: { rule: Number(row.score), vector: 0, vector_raw: null, score: Number(row.score) } })),
@@ -129,7 +133,7 @@ const rankedFor = cache(async (viewer: Viewer): Promise<Ranked> => {
 export async function getHybridRecommendations(viewer: Viewer, k = SHOWN): Promise<Recommendations> {
   const ranked = await rankedFor(viewer);
   const top = ranked.rows.slice(0, k);
-  const quests = await getQuestsByIds(top.map((t) => Number(t.row.session_id)));
+  const quests = await getQuestsByIds(top.map((t) => Number(t.row.session_id)), viewer);
   const byId = new Map(quests.map((q) => [q.session_id, q]));
   const out: RecommendedQuest[] = [];
   for (const { row, breakdown } of top) {

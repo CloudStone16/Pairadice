@@ -45,18 +45,25 @@
   --font-display: var(--font-fredoka), ui-rounded, "Segoe UI", system-ui, sans-serif;
   --font-body: var(--font-nunito), ui-rounded, "Segoe UI", system-ui, sans-serif;
 
-  --animate-flicker: flicker 2.4s ease-in-out infinite;
+  /* finite (2 x 2.4 s = 4.8 s) and transform-only: no opacity or filter keyframes (WCAG 2.2.2) */
+  --animate-flicker: flicker 2.4s ease-in-out 2;
+  /* title-screen cursor: 3 x 1.4 s = 4.2 s, then rests visible */
+  --animate-blink: blink 1.4s steps(1, end) 3;
   /* decorative bobbing stops by itself after three cycles (WCAG 2.2.2) */
   --animate-float: float 3.6s ease-in-out 3;
   /* transform-only so content never starts invisible */
   --animate-pop: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 
   @keyframes flicker {
-    0%, 100% { opacity: 1; filter: brightness(1); }
-    18% { opacity: 0.86; filter: brightness(0.94); }
-    37% { opacity: 1; filter: brightness(1.08); }
-    58% { opacity: 0.9; filter: brightness(0.97); }
-    79% { opacity: 1; filter: brightness(1.05); }
+    0%, 100% { transform: scale(1); }
+    18% { transform: scale(0.97); }
+    37% { transform: scale(1.04); }
+    58% { transform: scale(0.98); }
+    79% { transform: scale(1.03); }
+  }
+  @keyframes blink {
+    0%, 55% { transform: scale(1); }
+    56%, 100% { transform: scale(0.8); }
   }
   @keyframes float {
     0%, 100% { transform: translateY(0); }

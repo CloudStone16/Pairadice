@@ -1,3 +1,4 @@
+import "server-only";
 import { hash, verify } from "@node-rs/argon2";
 
 // argon2id, OWASP minimum profile: 19 MiB, 2 passes, 1 lane.

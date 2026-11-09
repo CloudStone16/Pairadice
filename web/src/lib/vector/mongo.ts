@@ -8,7 +8,8 @@ declare global {
   var __pairadiceMongoDownUntil: number | undefined;
 }
 
-const DEFAULT_URI = "mongodb://127.0.0.1:27018/?directConnection=true";
+/** Local development default only; production must set MONGO_URI (the URI itself is never logged). */
+const DEV_DEFAULT_URI = "mongodb://127.0.0.1:27018/?directConnection=true";
 /** After a failure, fail fast for this long instead of paying the selection timeout on every call. */
 const COOLDOWN_MS = 10_000;
 
@@ -16,8 +17,17 @@ export const COLLECTION_NAMES = { players: "player_embeddings", sessions: "sessi
 export const INDEX_NAMES = { players: "player_vec_idx", sessions: "session_vec_idx" } as const;
 export type VectorKind = keyof typeof COLLECTION_NAMES;
 
+function mongoUri(): string {
+  const uri = process.env.MONGO_URI;
+  if (uri) return uri;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("MONGO_URI is required in production (no default; set it in the environment).");
+  }
+  return DEV_DEFAULT_URI;
+}
+
 function client(): MongoClient {
-  return (globalThis.__pairadiceMongo ??= new MongoClient(process.env.MONGO_URI || DEFAULT_URI, {
+  return (globalThis.__pairadiceMongo ??= new MongoClient(mongoUri(), {
     serverSelectionTimeoutMS: 1500,
     connectTimeoutMS: 1500,
     socketTimeoutMS: 5000,

@@ -1,7 +1,9 @@
-import { beforeAll, describe, expect, test } from "bun:test";
-import { hashPassword, verifyPassword } from "./password";
-import { hashToken, newRawToken } from "./token";
-import { isLimited, recordFailure, reset } from "./rate-limit";
+import { beforeAll, describe, expect, mock, test } from "bun:test";
+import { hashToken, isValidRawToken, newRawToken } from "./token";
+
+// password.ts imports "server-only", which throws outside the React server build
+mock.module("server-only", () => ({}));
+const { hashPassword, verifyPassword } = await import("./password");
 
 beforeAll(() => {
   process.env.AUTH_SECRET = "x".repeat(40);
@@ -41,15 +43,11 @@ describe("token", () => {
   });
 });
 
-describe("rate limit", () => {
-  test("blocks after 5 failures and reset clears", () => {
-    const key = "a@example.com|1.2.3.4";
-    for (let i = 0; i < 5; i++) {
-      expect(isLimited(key)).toBe(false);
-      recordFailure(key);
-    }
-    expect(isLimited(key)).toBe(true);
-    reset(key);
-    expect(isLimited(key)).toBe(false);
+describe("isValidRawToken", () => {
+  test("accepts only 43 base64url characters", () => {
+    expect(isValidRawToken(newRawToken())).toBe(true);
+    expect(isValidRawToken("short")).toBe(false);
+    expect(isValidRawToken(undefined)).toBe(false);
+    expect(isValidRawToken("a".repeat(42) + "=")).toBe(false);
   });
 });

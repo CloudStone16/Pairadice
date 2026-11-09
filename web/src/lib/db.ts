@@ -30,26 +30,33 @@ function readPort(): number {
   return port;
 }
 
+/** The root / MYSQL_USER / MYSQL_PWD fallback exists for local development only, and only when asked for. */
+function devFallbackEnabled(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.PAIRADICE_DEV_DB_FALLBACK === "1";
+}
+
 function readUser(login: DbLogin): string {
-  const isProd = process.env.NODE_ENV === "production";
   const suffix = LOGIN_SUFFIX[login];
   let user = process.env[`PD_DB_USER_${suffix}`];
-  if ((user === undefined || user === "") && login === "web") user = process.env.MYSQL_USER;
-  if (isProd && (user === undefined || user === "" || user.toLowerCase() === "root")) {
+  if ((user === undefined || user === "") && login === "web" && devFallbackEnabled()) {
+    user = process.env.MYSQL_USER || "root";
+  }
+  if (user === undefined || user === "") {
+    throw new Error(
+      `PD_DB_USER_${suffix} is not set. Start the app with "bun run dev:kc" (reads the logins from the macOS Keychain), ` +
+        `or export PD_DB_USER_${suffix} and PD_DB_PWD_${suffix}. ` +
+        `Local development may set PAIRADICE_DEV_DB_FALLBACK=1 to use MYSQL_USER/MYSQL_PWD instead.`,
+    );
+  }
+  if (process.env.NODE_ENV === "production" && user.toLowerCase() === "root") {
     throw new Error(
       `Refusing to connect as root in production. Set PD_DB_USER_${suffix} to a non-root login (web: ${READ_ONLY_USER}, created by database/setup.sh).`,
     );
   }
-  if (user === undefined || user === "") {
-    if (login !== "web") {
-      throw new Error(`PD_DB_USER_${suffix} is not set; the "${login}" database login has no default.`);
-    }
-    user = "root";
-  }
   if (user.toLowerCase() === "root" && !globalThis.__pairadiceRootWarned) {
     globalThis.__pairadiceRootWarned = true;
     console.warn(
-      `[pairadice] Connecting to MySQL as root. Prefer a role login (PD_DB_USER_${suffix}, see .env.example).`,
+      `[pairadice] Connecting to MySQL as root (dev fallback). Prefer a role login: bun run dev:kc.`,
     );
   }
   return user;
@@ -60,10 +67,12 @@ function createPool(login: DbLogin): Pool {
   const socketPath = process.env.MYSQL_SOCKET;
   const suffix = LOGIN_SUFFIX[login];
   let password = process.env[`PD_DB_PWD_${suffix}`];
-  if ((password === undefined || password === "") && login === "web") password = process.env.MYSQL_PWD;
+  if ((password === undefined || password === "") && login === "web" && devFallbackEnabled()) {
+    password = process.env.MYSQL_PWD;
+  }
   if (!socketPath && (password === undefined || password === "")) {
     throw new Error(
-      `Neither MYSQL_SOCKET nor PD_DB_PWD_${suffix} is set. Export one in the shell before starting the app. Credentials are never stored in files.`,
+      `Neither MYSQL_SOCKET nor PD_DB_PWD_${suffix} is set. Start the app with "bun run dev:kc" or export one in the shell. Credentials are never stored in files.`,
     );
   }
   const pool = mysql.createPool({
@@ -132,12 +141,16 @@ export async function query<T extends object>(sql: string, params: SqlParams = [
 }
 
 /**
- * Run a `CALL proc(...)` and return its first result set.
+ * Run a `CALL proc(...)` through the given login and return its first result set.
  * mysql2 returns [resultSet1, ..., OkPacket] for CALL; anything else is an error.
  */
-export async function callProc<T extends object>(sql: string, params: SqlParams = []): Promise<T[]> {
+export async function callProcAs<T extends object>(
+  login: DbLogin,
+  sql: string,
+  params: SqlParams = [],
+): Promise<T[]> {
   checkParams(params);
-  const [result] = await poolFor("web").query<Array<Array<T & RowDataPacket>>>({
+  const [result] = await poolFor(login).query<Array<Array<T & RowDataPacket>>>({
     sql,
     values: [...params],
     timeout: QUERY_TIMEOUT_MS,
@@ -177,27 +190,44 @@ export async function execAs(login: DbLogin, sql: string, params: SqlParams = []
   return result;
 }
 
-/** Run fn on one connection inside BEGIN/COMMIT; ROLLBACK on error; the connection is always released. */
+/**
+ * Run fn on one connection inside BEGIN/COMMIT; ROLLBACK on error. If BEGIN, ROLLBACK or COMMIT itself
+ * fails the connection state is unknown, so it is destroyed instead of going back to the pool.
+ */
 export async function transactionAs<R>(
   login: DbLogin,
   fn: (conn: PoolConnection) => Promise<R>,
 ): Promise<R> {
   const conn = await poolFor(login).getConnection();
+  let discard = false;
   try {
-    await conn.beginTransaction();
     try {
-      const result = await fn(conn);
-      await conn.commit();
-      return result;
+      await conn.beginTransaction();
+    } catch (err) {
+      discard = true;
+      throw err;
+    }
+    let result: R;
+    try {
+      result = await fn(conn);
     } catch (err) {
       try {
         await conn.rollback();
       } catch (rollbackErr) {
-        console.error("[pairadice] rollback failed:", rollbackErr);
+        discard = true;
+        console.error("[pairadice] rollback failed:", rollbackErr instanceof Error ? rollbackErr.message : "unknown");
       }
       throw err;
     }
+    try {
+      await conn.commit();
+    } catch (err) {
+      discard = true;
+      throw err;
+    }
+    return result;
   } finally {
-    conn.release();
+    if (discard) conn.destroy();
+    else conn.release();
   }
 }

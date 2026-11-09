@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { execAs, queryAs } from "../db";
 import { writeLoginForRoles, type AppRole, type DbLogin } from "../db-roles";
-import { hashToken, newRawToken } from "./token";
+import { hashToken, isValidRawToken, newRawToken } from "./token";
 
 // Only the "auth" pool touches auth_token / auth_account.
 
@@ -52,8 +52,23 @@ interface SessionRow {
   role_name: string | null;
 }
 
+let secretFailureLogged = false;
+
 /** Session for a raw cookie value, or null (unknown, revoked, expired or banned). */
 export async function sessionFromToken(raw: string): Promise<Session | null> {
+  if (!isValidRawToken(raw)) return null;
+  let tokenHash: Buffer;
+  try {
+    tokenHash = hashToken(raw);
+  } catch (err) {
+    // AUTH_SECRET missing or too short: sessions cannot be verified. Treat the request as signed out
+    // (once-only log) instead of failing every page with a 500.
+    if (!secretFailureLogged) {
+      secretFailureLogged = true;
+      console.error("[auth] sessions cannot be verified, treating requests as signed out:", err instanceof Error ? err.message : "unknown");
+    }
+    return null;
+  }
   const rows = await queryAs<SessionRow>(
     "auth",
     `SELECT u.user_id, u.username, u.display_name, u.status, r.role_name
@@ -63,7 +78,7 @@ export async function sessionFromToken(raw: string): Promise<Session | null> {
        LEFT JOIN role r ON r.role_id = ur.role_id
       WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > UTC_TIMESTAMP()
         AND u.status <> 'banned'`,
-    [hashToken(raw)],
+    [tokenHash],
   );
   const first = rows[0];
   if (!first) return null;
@@ -106,6 +121,18 @@ export function writeLoginFor(session: Session): Exclude<DbLogin, "web" | "auth"
   const login = writeLoginForRoles(session.roles);
   if (!login) throw new Error("This account has no role that allows changes.");
   return login;
+}
+
+/**
+ * Sign-in / sign-up: revoke the session token this request already carries (if it is well formed), then
+ * issue a fresh one and set the cookie. Throws on any failure, so callers return the generic error; the
+ * cookie is set last so a failure never leaves a cookie without a stored token.
+ */
+export async function startSession(userId: number, userAgent: string | null | undefined): Promise<void> {
+  const previous = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (isValidRawToken(previous)) await revokeSession(previous);
+  const { token } = await createSession(userId, userAgent);
+  await setSessionCookie(token);
 }
 
 /** For server actions: set the session cookie (call after createSession). */

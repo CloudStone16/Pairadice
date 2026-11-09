@@ -4,18 +4,22 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { queryAs, transactionAs } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { isLimited, recordFailure, reset } from "@/lib/auth/rate-limit";
 import {
-  SESSION_COOKIE,
-  clearSessionCookie,
-  createSession,
-  revokeSession,
-  setSessionCookie,
-} from "@/lib/auth/session";
+  clearFailures,
+  countAttempt,
+  isBlocked,
+  recordFailure,
+  signInAttemptLimits,
+  signInFailureLimit,
+  signUpLimits,
+} from "@/lib/auth/rate-limit";
+import { safeNext } from "@/lib/auth/safe-next";
+import { SESSION_COOKIE, clearSessionCookie, revokeSession, startSession } from "@/lib/auth/session";
+import { GENERIC_ERROR, describeError, mapSignUpError } from "@/lib/auth/signup-errors";
 import type { AuthField, AuthFormState } from "@/lib/auth/form-state";
 
 const GENERIC_SIGN_IN = "That email and password do not match.";
-const GENERIC_ERROR = "Something went wrong, please try again.";
+const TOO_MANY = "Too many attempts, try again in a few minutes.";
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const USERNAME_RE = /^[A-Za-z0-9_]{3,32}$/;
 
@@ -24,18 +28,16 @@ function text(formData: FormData, name: string): string {
   return typeof v === "string" ? v : "";
 }
 
+/**
+ * The caller's address for rate limiting. Behind a proxy the RIGHT-most X-Forwarded-For entry is the one
+ * the proxy added (everything left of it is client-supplied and spoofable). Without the header all
+ * callers share the "local" bucket. Bounded and charset-limited so it is safe as a key.
+ */
 async function clientIp(): Promise<string> {
   const h = await headers();
-  const first = h.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return first ? first : "local";
-}
-
-/** Same-site relative paths only. */
-function safeNext(raw: string): string {
-  if (raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\") && !/[\u0000-\u001f]/.test(raw)) {
-    return raw;
-  }
-  return "/hearth";
+  const parts = h.get("x-forwarded-for")?.split(",") ?? [];
+  const last = parts[parts.length - 1]?.trim() ?? "";
+  return /^[0-9a-fA-F:.]{2,45}$/.test(last) ? last.toLowerCase() : "local";
 }
 
 function validTimezone(tz: string): string {
@@ -48,11 +50,10 @@ function validTimezone(tz: string): string {
   }
 }
 
-let dummy: Promise<string> | undefined;
 // A real argon2id hash of a random value, so a missing account costs the same as a wrong password.
-function dummyHash(): Promise<string> {
-  return (dummy ??= hashPassword(crypto.randomUUID()));
-}
+// Computed at module load so the first sign-in for an unknown email is not measurably faster.
+const dummyHash: Promise<string> = hashPassword(crypto.randomUUID());
+dummyHash.catch(() => undefined); // surfaced where it is awaited; avoids an unhandled rejection here
 
 export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const email = text(formData, "email").trim().toLowerCase();
@@ -61,11 +62,14 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
   const values = { email };
   const fail = (message: string): AuthFormState => ({ status: "error", message, values });
 
-  const key = `${email}|${await clientIp()}`;
-  if (isLimited(key)) return fail("Too many attempts, try again in a few minutes.");
+  const ip = await clientIp();
+  // the email part of the keys is bounded so a huge value cannot bloat the limiter
+  const limitEmail = email.slice(0, 254);
+  const failures = signInFailureLimit(ip, limitEmail);
+  if (isBlocked(failures) || !countAttempt(signInAttemptLimits(ip, limitEmail)).ok) return fail(TOO_MANY);
 
   if (!email || !password || email.length > 254 || password.length > 1024) {
-    recordFailure(key);
+    recordFailure(failures);
     return fail(GENERIC_SIGN_IN);
   }
 
@@ -80,22 +84,25 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
     );
     const row = rows[0];
     // verify even when the account is missing so timing does not reveal it
-    const ok = await verifyPassword(row?.password_hash ?? (await dummyHash()), password);
+    const ok = await verifyPassword(row?.password_hash ?? (await dummyHash), password);
     if (row && ok && row.status !== "banned") userId = Number(row.user_id);
   } catch (err) {
-    console.error("[auth] sign-in lookup failed:", err instanceof Error ? err.message : "unknown");
+    console.error("[auth] sign-in lookup failed:", describeError(err));
     return fail(GENERIC_ERROR);
   }
   if (userId === null) {
-    recordFailure(key);
+    recordFailure(failures);
     return fail(GENERIC_SIGN_IN);
   }
 
-  reset(key);
-  const ua = (await headers()).get("user-agent");
-  const { token } = await createSession(userId, ua);
-  await setSessionCookie(token);
-  redirect(next);
+  try {
+    await startSession(userId, (await headers()).get("user-agent"));
+  } catch (err) {
+    console.error("[auth] could not start a session:", describeError(err));
+    return fail(GENERIC_ERROR);
+  }
+  clearFailures(failures);
+  redirect(next); // outside the try: redirect() works by throwing
 }
 
 export async function signUp(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -105,6 +112,9 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   const password = text(formData, "password");
   const timezone = validTimezone(text(formData, "timezone").trim());
   const values = { email, username, displayName };
+
+  // counted before any hashing: sign-up is the expensive path
+  if (!countAttempt(signUpLimits(await clientIp())).ok) return { status: "error", message: TOO_MANY, values };
 
   const fieldErrors: Partial<Record<AuthField, string>> = {};
   if (!USERNAME_RE.test(username)) fieldErrors.username = "Use 3-32 letters, digits or underscores.";
@@ -134,30 +144,17 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
       return id;
     });
   } catch (err) {
-    const e = err as { sqlState?: string; sqlMessage?: string };
-    if (e.sqlState === "45000" && e.sqlMessage) {
-      const m = e.sqlMessage;
-      const field: AuthField | undefined = /username/i.test(m)
-        ? "username"
-        : /email/i.test(m)
-          ? "email"
-          : /display/i.test(m)
-            ? "displayName"
-            : undefined;
-      return {
-        status: "error",
-        message: m,
-        fieldErrors: field ? { [field]: m } : undefined,
-        values,
-      };
-    }
-    console.error("[auth] sign-up failed:", err instanceof Error ? err.message : "unknown");
-    return { status: "error", message: GENERIC_ERROR, values };
+    const mapped = mapSignUpError(err);
+    if (mapped.message === GENERIC_ERROR) console.error("[auth] sign-up failed:", describeError(err));
+    return { status: "error", message: mapped.message, fieldErrors: mapped.fieldErrors, values };
   }
 
-  const ua = (await headers()).get("user-agent");
-  const { token } = await createSession(userId, ua);
-  await setSessionCookie(token);
+  try {
+    await startSession(userId, (await headers()).get("user-agent"));
+  } catch (err) {
+    console.error("[auth] could not start a session after sign-up:", describeError(err));
+    return { status: "error", message: GENERIC_ERROR, values };
+  }
   redirect("/hearth");
 }
 
@@ -167,7 +164,7 @@ export async function signOut(): Promise<void> {
     try {
       await revokeSession(raw);
     } catch (err) {
-      console.error("[auth] sign-out revoke failed:", err instanceof Error ? err.message : "unknown");
+      console.error("[auth] sign-out revoke failed:", describeError(err));
     }
   }
   await clearSessionCookie();
