@@ -19,7 +19,7 @@ export default async function NewQuestPage() {
     );
   }
 
-  const [catalog, accounts] = await Promise.all([getQuestCatalog(viewer), getHostAccounts(viewer)]);
+  const [catalog, accounts] = await Promise.all([getQuestCatalog(), getHostAccounts(viewer)]);
 
   return (
     <Window variant="parchment" title="New quest" titleAs="p" landmark>

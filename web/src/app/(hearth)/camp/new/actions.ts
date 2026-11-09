@@ -29,7 +29,7 @@ export async function hostQuest(_prev: QuestFormState, formData: FormData): Prom
   }
 
   const [catalog, accounts, user] = await Promise.all([
-    getQuestCatalog(viewer),
+    getQuestCatalog(),
     getHostAccounts(viewer),
     getUserById(viewer.userId),
   ]);
