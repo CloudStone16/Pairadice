@@ -1,10 +1,11 @@
 # PairADice: handoff for Arjun
 
-Last updated: 2026-11-09. `main` is at `e6ba1ac`. This file is meant to be the only document you need to finish
+Last updated: 2026-11-10. Phase 6 (moderation) is built on branch `phase-6-moderation`, on top of `main` at `83f46be`, and is not merged yet.
+This file is meant to be the only document you need to finish
 the project. It is tracked in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
 
 You wrote the root README and `documents/DEMO.md` and pushed about 48 commits, so this skips the basics and spends
-its words on what is left: full specs for the remaining work, the exact conventions the code follows, and the traps
+its words on what is left: specs for the remaining work, the exact conventions the code follows, and the traps
 that have already cost time.
 
 Rules for this file: it never contains a password, key or token, only the names of environment variables and
@@ -19,7 +20,7 @@ Keychain items. Keep it that way if you edit it.
 5. [Seed users and test accounts](#5-seed-users-and-test-accounts)
 6. [File map](#6-file-map)
 7. [Conventions and gotchas](#7-conventions-and-gotchas)
-8. [Phase 6: Moderation UI](#8-phase-6-moderation-ui-recommended-next)
+8. [Phase 6: Moderation (done)](#8-phase-6-moderation-done)
 9. [Phase 5: Camp chat and DMs](#9-phase-5-camp-chat-and-dms)
 10. [MongoDB authentication](#10-mongodb-authentication)
 11. [Discord OAuth sign-in](#11-discord-oauth-sign-in-optional-polish)
@@ -37,7 +38,7 @@ PairADice is an LFG (looking-for-group) board for video games, a PES University 
 Learning Level 3, Aug to Dec 2026, 50 marks). The database design is what is graded; the web app shows it working.
 Repo: `CloudStone16/Pairadice`, branch `main`.
 
-Phases 0 to 4 and profile editing are done. From `git log`, in the order they landed:
+Phases 0 to 4, profile editing and Phase 6 (moderation) are done. From `git log`, in the order they landed:
 
 | Area | Commits (newest last in each row) |
 |---|---|
@@ -50,29 +51,31 @@ Phases 0 to 4 and profile editing are done. From `git log`, in the order they la
 | Friends and blocks | `edeb1d2` procedures, `ec78788`/`5a6001a`/`7cb7026` web |
 | Hardening | `a094618` closed procedure auth holes, `9399e2b` reads on the viewer's own login, `a0d1273` accessibility |
 | Profile editing | `fdc9b97` procedures, `894396a` actions and loader, `f493469` editor UI |
-| Docs | `741007f` README, `c581614` DEMO, `e6ba1ac` sync |
+| Docs | `741007f` README, `c581614` DEMO, `e6ba1ac` sync, `83f46be` handoff |
+| Phase 6 moderation | branch `phase-6-moderation`: `12_moderation.sql`, RBAC and routine changes, `/mod`, `/admin/users`, `/report` |
 
-Counts, taken from the SQL files on 2026-11-09 (not from a live server):
+Counts, taken from the SQL files on 2026-11-10 (the 254 check total is from a `--tests` run):
 
 | Object | Count |
 |---|---|
 | Tables | 45 (`01_schema.sql`) |
 | Views | 4 (`v_open_sessions`, `v_player_card`, `v_session_roster`, `v_outbox_dead`) |
-| Functions | 7: `fn_has_permission`, `fn_is_blocked`, `fn_user_active`, `fn_are_friends`, `fn_platform_compatible`, `fn_local_time`, `fn_trust_score` |
-| Procedures | 32: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11 |
+| Functions | 8: `fn_has_permission`, `fn_is_blocked`, `fn_user_active`, `fn_are_friends`, `fn_platform_compatible`, `fn_local_time`, `fn_trust_score`, `fn_staff_rank` |
+| Procedures | 41: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11, 9 in 12 (the 3 `t_*` test helpers in 06 are not counted) |
+| Events | 1: `ev_expire_sanctions` (12), every 5 minutes |
 | Triggers | 55: 23 in 02, 30 in 07 (vector sync), 2 in 09 |
-| DB checks | 153 in `06_constraint_tests.sql` (131 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 22 behaviour rows) |
-| Web unit tests | 77 across 8 files, all passing (`bun test`) |
-| Sprites | 115 JSON sources in `web/sprites/src/` |
-
-Several of these counts in the root README were stale; the README edit that accompanies this file corrects them.
+| DB checks | 254 in `06_constraint_tests.sql` (204 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 50 behaviour rows) |
+| Web unit tests | 106 across 10 files, all passing (`bun test`) |
+| Sprites | 120 JSON sources in `web/sprites/src/` (Phase 6 added `icon-claim`, `icon-lift`, `icon-hide-message`, `icon-restore`, `icon-users`) |
 
 What works today: schema, routines and RBAC; MongoDB vector store with outbox sync and hybrid ranking; email sign-in
 with a different MySQL login per role; hosting, joining and managing quests; friends and blocks; profile editing at
-`/character/edit`; the admin Vector Lab at `/admin/vector`.
+`/character/edit`; the admin Vector Lab at `/admin/vector`; moderation: player reports at `/report/[userId]`, the Guild Hall
+at `/mod` (overview, `/mod/reports`, `/mod/reports/[id]`, `/mod/sanctions`, `/mod/audit`) and admin users and roles at
+`/admin/users` and `/admin/users/[id]`.
 
-What does not exist yet: a moderation UI, chat and DM write paths, Discord sign-in, MongoDB authentication, a
-polish pass. Sections 8 to 12 spec each one.
+What does not exist yet: chat and DM write paths (Phase 5), Discord sign-in, MongoDB authentication, a polish pass.
+Sections 9 to 12 spec each one. The player still has direct `INSERT` on `message` and `review` until Phase 5.
 
 A mascot change is in flight (separate agent, not you): the site mascot moves from the lavender `dice-32` die to
 `mascot-cat`, a white maneki-neko cat with a die standing on its corner (32 px sprite `mascot-cat`), and the favicon
@@ -86,17 +89,17 @@ Source of truth is `documents/DBMS Level 3.pdf`. This reuses the README's map an
 | Rubric item | Marks | Status | Where | What would move it |
 |---|---:|---|---|---|
 | ER diagram | 2 | Done | `documents/pairadice_erd.drawio` (9 pages, generated by `documents/tools/gen_erd.py`) | Only if you add tables: add them to the generator and rerun (section 7) |
-| Relational schema, keys, constraints | 3 | Done | `01_schema.sql`; drawio page 9 | New tables (section 8) need adding to the generator |
-| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 153 checks in `06` | Keep the check count in README and DEMO in sync |
+| Relational schema, keys, constraints | 3 | Done | `01_schema.sql`; drawio page 9 | Any new table needs adding to the generator |
+| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 254 checks in `06` | Keep the check count in README and DEMO in sync |
 | NoSQL / vector DB creation | 4 | Done | `vector/src/schema.js`, `vector/scripts/init-db.js` | Mongo users bound to the roles (section 10) strengthens it |
 | Technology justification | 1 | Done | README, "Technology justification" (verified present, 3 subsections plus a table) | Re-read at the end |
-| DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 11 | Phases 5 and 6 add more procedures |
+| DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 12, except chat and review inserts | Phase 5 adds more procedures |
 | Nested / correlated / recursive, joins | 4 | Done | `05_sample_queries.sql` Q1 to Q18 | None |
-| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `11` | Phase 6 adds procedures and a function with tests |
+| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `12` | Phase 5 adds more, with tests |
 | NoSQL / vector feature with RUD | 7 | Done | `/admin/vector`, `vector/scripts/demo-rud.js`, hybrid Hearth | Keep the Vector Lab working through Mongo auth (section 10) |
-| Next.js UI | 3 | Mostly done | `web/` | Phase 6 and 5 screens, Phase 7 polish |
+| Next.js UI | 3 | Mostly done | `web/` | Phase 5 screens, Phase 7 polish |
 | Backend / API + DB integration | 2 | Done | server actions, per-role pools, `web/src/lib/mutations/` | None |
-| Authentication, 2+ roles, RBAC in the DB | 4 | Done for player and admin; moderator is only demonstrated in SQL | `04_rbac.sql`, `08_auth.sql`, `requireRole`, per-role logins | **Phase 6 is what shows the moderator role in the app.** This is the main reason it is first |
+| Authentication, 2+ roles, RBAC in the DB | 4 | Done | `04_rbac.sql`, `08_auth.sql`, `12_moderation.sql`, `requireRole`, per-role logins | Phase 6 made the moderator role visible in the app (`/mod`); a moderator gets 404 on `/admin/users` |
 | Documentation and Git/GitHub | 2 | Done | README, DEMO, this file, history | Final sync (section 12) |
 | Originality, individual contribution, viva | 4 | Depends on you | `documents/DEMO.md` | Rehearse; keep the app explainable |
 
@@ -106,11 +109,11 @@ Efforts are rough working days for one person who already knows the repo.
 
 | Order | Work | Effort | Why here |
 |---:|---|---|---|
-| 1 | Phase 6 Moderation UI (section 8) | 2 to 3 days | Shows the moderator role end to end. Reports, sanctions and the audit trail already work in SQL |
-| 2 | Phase 5 chat and DMs (section 9) | 1.5 to 2 days | The `message` table and its trigger exist; only the write path and screens are missing |
-| 3 | MongoDB authentication (section 10) | 0.5 day | Small and mostly a port. Do it before the demo script is finalised, because it changes demo commands |
-| 4 | Discord OAuth (section 11) | 1 day | Optional. Needs credentials from the owner |
-| 5 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
+| done | Phase 6 Moderation (section 8) | | Built and tested on `phase-6-moderation` |
+| 1 | Phase 5 chat and DMs (section 9) | 1.5 to 2 days | The `message` table and its trigger exist; only the write path and screens are missing. It also closes the last direct player grants |
+| 2 | MongoDB authentication (section 10) | 0.5 day | Small and mostly a port. Do it before the demo script is finalised, because it changes demo commands |
+| 3 | Discord OAuth (section 11) | 1 day | Optional. Needs credentials from the owner |
+| 4 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
 
 If time runs short, cut in this order (first item is cut first):
 
@@ -121,8 +124,7 @@ If time runs short, cut in this order (first item is cut first):
 5. Admin game-catalogue management and the review-writing form.
 6. MongoDB authentication. Cut it last of these, because it is cheap and answers an obvious viva question.
 
-Never cut: the Phase 6 report queue, report detail with actions, sanctions list and audit viewer; the tests for
-whatever you build; the README and DEMO sync; a full rehearsal.
+Never cut: the tests for whatever you build; the README and DEMO sync; a full rehearsal.
 
 ## 4. Environment and running
 
@@ -153,7 +155,7 @@ Passwords for the five login flags come from `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_AP
 `PD_ADMIN_PWD` when set, otherwise from a hidden prompt. Re-running resets those passwords, and re-running
 `04_rbac.sql` detaches existing logins, so pass every login you want to keep on every run.
 
-Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
+Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, 12, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
 06 (tests) at the end. 04 must come after every procedure it grants on.
 
 Passwordless path (recommended on Linux, needs the `auth_socket` plugin):
@@ -177,7 +179,7 @@ Password path (works anywhere). The password variables can stay unset to get hid
 | `pd_web` | `pairadice_web_ro` | anonymous page reads; no `message`, `friendship`, `user_block`, `auth_*`, `report`, `sanction`, `audit_log`; no EXECUTE on any routine | `WEB` |
 | `pd_auth` | `pairadice_auth` | sign-up, sign-in, sessions; the only login that touches `auth_account` and `auth_token` | `AUTH` |
 | `pd_api` | `pairadice_player` | signed-in players: reads plus DEFINER procedures | `PLAYER` |
-| `pd_mod` | `pairadice_moderator` | the player role plus `report` SELECT/UPDATE, `sanction` SELECT/INSERT, `audit_log` SELECT, full `users` SELECT, `UPDATE (is_deleted)` on `message`, EXECUTE `sp_expire_sanctions` | `MODERATOR` |
+| `pd_mod` | `pairadice_moderator` | the player role plus SELECT on `report`, `sanction`, `audit_log` and `users`, and EXECUTE on `sp_expire_sanctions`, `sp_claim_report`, `sp_resolve_report`, `sp_issue_sanction`, `sp_lift_sanction`, `sp_moderate_message` and `fn_staff_rank`; no direct writes | `MODERATOR` |
 | `pd_admin` | `pairadice_admin` | SELECT, INSERT, UPDATE, DELETE and EXECUTE on `pairadice.*`; no DDL, no GRANT OPTION | `ADMIN` |
 
 A sixth role, `pairadice_vec_worker`, exists but has no login yet; the vector worker still connects as whatever
@@ -247,7 +249,7 @@ Run from `web/`:
 ```bash
 bun run typecheck      # tsc --noEmit
 bun run lint           # eslint
-bun test               # 77 pass, 0 fail in 8 files today
+bun test               # 106 pass, 0 fail in 10 files today
 bun run build          # runs bun run sprites first
 ```
 
@@ -267,24 +269,24 @@ From `database/03_seed.sql`. IDs are fixed.
 | 4 | `lukas_mc` | not Aarav's friend; DM with Mei in the seed |
 | 5 | `sofia_bw` | email account with `email_verified` false |
 | 6 | `tom_builds` | |
-| 7 | `jake_fn` | target of the DEMO sanction (rolled back) |
+| 7 | `jake_fn` | target of the DEMO sanction and report (lifted again) |
 | 8 | `rohan_duelist` | hosts session 8 |
 | 9 | `mod_alex` | **moderator** (role granted by user 10) |
 | 10 | `admin_sam` | **admin** (bootstrap row, `assigned_by` NULL) |
 | 11 | `toxic_tyler` | **suspended** by a 7 day sanction; target of reports 1 and 2; blocked by users 1 and 2 |
 | 12 | `kiara_ctrl` | the recursive-CTE example; accepted into session 1 |
 
-Every user also has the `player` role. Seed data you will use in Phase 6: reports 1 and 2 (harassment against Tyler,
+Every user also has the `player` role. Seed data for testing moderation: reports 1 and 2 (harassment against Tyler,
 both now `actioned`), a `warn` and a `suspend` sanction on Tyler, message 4 (the abusive chat line) and an audit log
 filled by triggers. Seed messages: 1 to 5 are session chat, 6 to 8 are DMs (1<->8, 4->3), 9 is session 7 chat.
-The seed has no `open` report, so file one as a player (after `sp_report_user` exists) to test the queue.
+The seed has no `open` report, so file one as a player at `/report/7` (or any user id) to test the queue.
 
 Test accounts. The seed password hashes are placeholders (`SEED-PLACEHOLDER-NOT-A-REAL-HASH`), so **no seed user
 can sign in with a password**. They are reachable only through the dev "play as" switch. Several seed users also have
 `discord` rows in `auth_account` with fake snowflake ids; a real Discord login will never match them. To test real
 sign-in, create an account at `/sign-up`, which runs `sp_register_user` and gives the `player` role. To test the
 moderator or admin role through a real session you would need to grant it from SQL as the admin loader; the dev
-switch is simpler. After Phase 6 the admin role-management screen can do it.
+switch is simpler. The admin role-management screen (`/admin/users/[id]`) can now do it.
 
 ## 6. File map
 
@@ -295,12 +297,13 @@ database/
   03_seed.sql             12 users, 3 games, 10 sessions, reports, sanctions
   04_rbac.sql             six MySQL roles and every grant
   05_sample_queries.sql   Q1..Q18
-  06_constraint_tests.sql 153 checks; helpers t_expect_error, t_expect_msg, t_probe
+  06_constraint_tests.sql 254 checks; helpers t_expect_error, t_expect_msg, t_probe
   07_vector_outbox.sql    30 sync triggers, outbox procedures, v_outbox_dead
   08_auth.sql             sp_register_user
   09_sessions.sql         quest lifecycle procedures, 2 recommendation-outcome triggers
   10_social.sql           friend and block procedures
   11_profiles.sql         9 profile-editing procedures
+  12_moderation.sql       fn_staff_rank, 9 moderation and role procedures, ev_expire_sanctions
   setup.sh                loader (read --help)
   README.md               agent guide, GITIGNORED (local only)
 vector/
@@ -313,15 +316,17 @@ web/
   src/proxy.ts            replaces middleware
   src/app/(auth)/         sign-in, sign-up, actions.ts
   src/app/(hearth)/       hearth, board, camp/[id], camp/new, party, friends, character,
-                          character/edit, mod (placeholder), admin/vector, styleguide
+                          character/edit, mod/** (Guild Hall), admin/vector, admin/users/**,
+                          report/[userId], styleguide
   src/app/api/admin/vector/snapshot/route.ts
-  src/components/         ui, hearth, auth, camp, character, quest, social, lab
+  src/components/         ui, hearth, auth, camp, character, quest, social, lab, mod, admin, report
   src/lib/
     db.ts, db-roles.ts            per-role pools: queryAs, execAs, callProcAs, transactionAs
     auth/                         guards, viewer, session, token, password, rate-limit, safe-next, signup-errors
     read-login.ts                 readCtx: picks the login for a read, fails closed to "web"
-    mutations/                    run.ts (runAsViewer), sessions, participants, social, profile
-    queries*.ts                   typed reads; sql-parts.ts shared fragments
+    mutations/                    run.ts (runAsViewer), sessions, participants, social, profile, moderation, report, admin
+    moderation/, report/          plain validation modules with tests
+    queries*.ts                   typed reads (queries-mod.ts, queries-admin.ts for Phase 6); sql-parts.ts shared fragments
     recommend.ts, vector/         hybrid ranking and the read-only Mongo client
     sprite-names.ts               the sprite contract list
 documents/
@@ -352,8 +357,7 @@ calls `requireRole("admin", PATH)` in each action).
 **Every app write is a DEFINER procedure.** The player login has no direct DML on sessions, participants,
 friendships, blocks or the profile tables. A web mutation is one `CALL` through `runAsViewer` (`mutations/run.ts`),
 which picks the login of the viewer's highest role and turns SQLSTATE 45000 messages into user-visible text. Two
-grants are still direct and are exactly what Phases 5 and 6 should replace: player `INSERT` on `message`, `review`
-and `report`, and moderator `INSERT` on `sanction`, `UPDATE` on `report` and `UPDATE (is_deleted)` on `message`.
+grants are still direct and are what Phase 5 should replace: player `INSERT` on `message` and `review`.
 
 **Procedure pattern.** Copy `database/09_sessions.sql` or `10_social.sql`:
 
@@ -409,145 +413,43 @@ never shown by colour alone. Sprites are drawn at integer scales only.
 `lib/profile/validate.test.ts`, `lib/auth/auth.test.ts`. Keep validation in plain modules without `server-only` so
 it is unit-testable.
 
-## 8. Phase 6: Moderation UI (recommended next)
+## 8. Phase 6: Moderation (done)
 
-Goal: the `/mod` Guild Hall, so the moderator role is visible in the browser, and a "report a player" entry for
-players. Reports, sanctions and the audit log already work in SQL. The screens and a handful of safe procedures are
-what is missing.
+Built on branch `phase-6-moderation`. Moderation, reporting and role management work in the browser, and every write is
+a procedure. The old direct grants are gone: player `INSERT` on `report`, and moderator `INSERT` on `sanction`,
+`UPDATE` on `report` and `UPDATE (is_deleted)` on `message`. Probes in `06` prove each revoke.
 
-### What exists in SQL
+**Database** (`database/12_moderation.sql`, loaded after 11 and before the seed; grants in `04_rbac.sql`):
 
-Tables (`01_schema.sql`):
-
-- `report(report_id, reporter_id, reported_user_id, session_id, message_id, category, description, status, handled_by, created_at, resolved_at)`.
-  `category` is `harassment`, `cheating`, `spam`, `no_show` or `other`. `status` is `open`, `reviewing`, `actioned`
-  or `dismissed`. A CHECK forbids reporting yourself.
-- `sanction(sanction_id, user_id, sanction_type, reason, issued_by, report_id, starts_at, ends_at)`.
-  Types are `warn`, `mute`, `suspend`, `ban`. `ends_at` NULL means permanent, and a CHECK requires `ends_at > starts_at`
-  and `user_id <> issued_by`. **There is no "lifted" column.**
-- `audit_log(log_id, actor_id, entity, entity_id, action, old_value, new_value, logged_at)`, append-only, filled by
-  triggers. `actor_id` NULL means the system.
-- `role`, `permission`, `role_permission`, `user_role(user_id, role_id, assigned_at, assigned_by)`.
-
-Permission codes: `session.create`, `session.join`, `message.send`, `review.write`, `report.create`,
-`report.review`, `user.sanction`, `audit.read`, `user.ban`, `role.assign`, `game.manage`. Player holds the first five.
-Moderator adds `report.review`, `user.sanction`, `audit.read`. Admin holds all eleven.
-
-Triggers (`02_routines.sql`):
-
-| Trigger | What it enforces |
-|---|---|
-| `trg_report_bu` | a non-NULL `handled_by` must hold `report.review` ("Only moderators can handle reports"); sets `resolved_at` when status becomes `actioned` or `dismissed` |
-| `trg_report_au` | audit row `report status_change` |
-| `trg_sanction_bi` | issuer needs `user.sanction`; a `ban` needs `user.ban` ("Only admins can ban users") |
-| `trg_sanction_ai` | audit row `sanction issue`; `ban` sets the user to `banned`, `suspend` sets `suspended` (a banned user stays banned); recomputes `trust_score` |
-| `trg_users_au` | audit row `users status_change` with `@audit_actor` as the actor |
-| `trg_user_role_bi` / `_ai` | an assigner needs `role.assign`; audit row `user_role grant` |
-| `trg_message_bi` | a sender who is muted, suspended or banned is refused; session chat needs an accepted participant; a DM across a block is refused |
-| `trg_block_ai` | audit row `user_block block` |
-
-Procedure: `sp_expire_sanctions()` returns suspended users to `active` once no active suspension remains and refreshes
-trust scores. **Nothing schedules it** (the `EVENT` is commented out at the end of `02_routines.sql`), so an expired
-suspension stays in force until something calls it. Moderator has EXECUTE on it. It never restores a `banned` user.
-
-Grants (`04_rbac.sql`): the moderator inherits `pairadice_player` and adds `SELECT, UPDATE` on `report`,
-`SELECT, INSERT` on `sanction`, `SELECT` on `audit_log`, `SELECT` on all of `users`, `UPDATE (is_deleted)` on
-`message`, and EXECUTE on `sp_expire_sanctions`. The player login also has direct `INSERT` on `report`. The admin has
-DML and EXECUTE on the whole schema. Because moderator and admin write through `pd_mod` and `pd_admin`, the database
-itself refuses a player who tries these actions.
-
-### What is wrong with the direct grants
-
-The player's `INSERT` on `report` lets a forged statement file a report as someone else (`reporter_id` is not
-checked). The moderator's direct `INSERT` on `sanction` and `UPDATE` on `report` skip every rule except the triggers:
-no check on who the target is, no report linkage, no duration limits. `message` soft-deletes by a moderator write no
-audit row at all (there is no trigger on `message` updates). Replace each with a procedure, then revoke the direct
-grant and add a probe that proves the revoke (section 14). That is also a better RBAC story for the viva.
-
-### New procedures
-
-All in a new file `database/12_moderation.sql`, loaded after `11_profiles.sql` and before the seed in `setup.sh`,
-with grants added to `04_rbac.sql`. Follow the procedure pattern in section 7.
-
-| Procedure | Who | What it does |
+| Routine | Who | What |
 |---|---|---|
-| `sp_report_user(actor, reported_id, category, description, session_id, message_id)` | player and up | needs `report.create`; target exists and is not the actor; description at most 1000 characters; if `session_id` is given the actor and target must both have been in that session; if `message_id` is given it must be sent by the target and visible to the actor (session chat the actor is in, or a DM to the actor); refuses a duplicate open report by the same reporter against the same target in the last 24 hours ("You already reported this player"); caps a reporter at about 10 reports per day; returns the new `report_id` |
-| `sp_my_reports(actor)` | player and up | the actor's own reports with status, so players see "reviewing" or "resolved" but never the handler or the sanction |
-| `sp_claim_report(actor, report_id)` | moderator, admin | needs `report.review`; `open` becomes `reviewing` with `handled_by` set; refuses if another moderator already holds it (admin may take over); refuses a report the actor filed or is the subject of |
-| `sp_resolve_report(actor, report_id, outcome, note)` | moderator, admin | `outcome` is `dismissed` or `actioned`; report must be `open` or `reviewing`; same conflict-of-interest refusal; note up to 500 characters goes into the audit row's `new_value` |
-| `sp_issue_sanction(actor, user_id, type, reason, ends_at, report_id)` | moderator, admin | needs `user.sanction`; `ban` needs `user.ban`; `reason` 3 to 255 characters; `warn` and `ban` take no end date, `mute` and `suspend` need an end date in the future and at most 90 days away; target must exist; a moderator may not sanction staff, and an admin may not sanction another admin (use `fn_staff_rank` below); if `report_id` is given the report must be about the same user, and the procedure marks it `actioned` in the same transaction; relies on the existing triggers for the status flip and the audit row |
-| `sp_lift_sanction(actor, sanction_id, reason)` | moderator, admin | needs `user.sanction`, and `user.ban` for a ban; refuses a sanction that already ended; ends it by setting `ends_at = GREATEST(UTC_TIMESTAMP(), starts_at + INTERVAL 1 SECOND)` (the CHECK needs it later than `starts_at`); writes an audit row `sanction lift` with the reason; if no other active `suspend` or `ban` remains it sets `users.status` back to `active` under `@audit_actor`, so the existing trigger records it |
-| `sp_moderate_message(actor, message_id, hide, report_id)` | moderator, admin | needs `report.review`; soft-delete or restore a message; writes an audit row (nothing else does) |
-| `sp_grant_role(actor, user_id, role_name)` | admin | needs `role.assign`; inserts into `user_role` (the trigger audits it) |
-| `sp_revoke_role(actor, user_id, role_name)` | admin | needs `role.assign`; refuses to remove `player`, to remove the actor's own admin role, or to remove the last admin; deletes the row and writes an audit row `user_role revoke` (no trigger does) |
+| `fn_staff_rank(user)` | any | 0 player, 1 moderator, 2 admin |
+| `sp_report_user`, `sp_my_reports` | player and up | file a report (rate limited, evidence must be visible to the reporter); list your own reports (no handler, no sanction) |
+| `sp_claim_report`, `sp_resolve_report` | moderator, admin | `open` to `reviewing`, then `dismissed` or `actioned` with a note merged into the audit row |
+| `sp_issue_sanction`, `sp_lift_sanction` | moderator, admin | warn / mute / suspend / ban; ban and lifting a ban need `user.ban` (admin) |
+| `sp_moderate_message` | moderator, admin | hide or restore a message, with an audit row |
+| `sp_grant_role`, `sp_revoke_role` | admin only | the moderator login has no EXECUTE on them |
+| `ev_expire_sanctions` | system | every 5 minutes runs `sp_expire_sanctions`, which now rewrites only trust scores that change |
 
-New function `fn_staff_rank(user_id)`: 0 for player, 1 for moderator, 2 for admin. Used by `sp_issue_sanction`.
+**Web.** Routes `/mod`, `/mod/reports`, `/mod/reports/[id]`, `/mod/sanctions`, `/mod/audit` (moderator and admin),
+`/admin/users` and `/admin/users/[id]` (admin), `/report/[userId]` (any signed-in player). "Report" links sit on the
+character sheet, camp roster and friend list, and `/character` shows "My reports". Code: `src/app/(hearth)/mod/**`,
+`admin/users/**`, `report/**`, `lib/queries-mod.ts`, `lib/queries-admin.ts`, `lib/mutations/{moderation,report,admin}.ts`,
+`lib/moderation/*`, `lib/report/*`, `components/{mod,admin,report}/*`. The `safeNext` helper now also rejects dot
+segments such as `/.//evil.com`, which protects the sign-in `next` and the report `back` redirects.
 
-Why "lift by ending it" and not a new `sanction_lift` table: the mute check in `trg_message_bi`, the trust score
-and `sp_expire_sanctions` all already honour `ends_at`, so shortening it unmutes and restores trust with no other
-change. The cost is that the "who lifted it and why" lives only in `audit_log`. If you would rather have a first-class
-record, add a table `sanction_lift(sanction_id PK, lifted_by, reason, lifted_at)` instead, and then update those three
-places to ignore lifted sanctions.
+**Design decisions to keep.**
 
-Because the procedures COMMIT, `sp_lift_sanction` and `sp_issue_sanction` cannot be wrapped in a transaction you
-roll back. This breaks the DEMO's "sanction then ROLLBACK" step (section 14 covers the fix).
-
-Expiry: have the sanctions page call `sp_expire_sanctions` on load (cheap, and moderator holds EXECUTE), and show a
-"Run expiry now" button. Optionally enable a MySQL event for it; the statement is commented at the end of
-`02_routines.sql`.
-
-### Screens
-
-All under the existing `(hearth)` group. Pages call `requireRole("moderator", PATH)`, and each server action calls it
-again. Reads use `readCtx(viewer)` (the moderator or admin login); writes use `runAsViewer`. Add query functions in a
-new `web/src/lib/queries-mod.ts`, mutations in `web/src/lib/mutations/moderation.ts`, validation in a plain
-`web/src/lib/moderation/validate.ts` with a `*.test.ts`, and UI in `web/src/components/mod/`.
-
-| Route | Screen | Notes |
-|---|---|---|
-| `/mod` | Guild Hall overview | counts of open and reviewing reports, active sanctions, sanctions ending within 24 hours; links to the pages below; replaces the placeholder in `(hearth)/mod/page.tsx`; use the `guild-hall-banner-32` sprite |
-| `/mod/reports` | Report queue | filter by status (default `open` and `reviewing`) and category; oldest first; columns: age, category, reporter, reported player, session; a "Take it" button runs `sp_claim_report`; keyset pagination by `report_id`; empty state "The queue is clear" |
-| `/mod/reports/[id]` | Report detail | reporter and reported player cards (trust meter, status, count of earlier reports and sanctions against them); the reported message (shown even if hidden, marked as such) with up to 10 lines of context from that session chat or that DM pair only; the report's audit history; **actions**: Dismiss, Warn, Mute (1, 3, 7 or 30 days), Suspend (1, 3, 7 or 30 days), Ban (admins only, and hidden for moderators; the database refuses it anyway), Hide message. Each action is a small form with a required reason and a confirm step for Suspend and Ban. A resolved report is read-only |
-| `/mod/sanctions` | Sanctions list | tabs Active, Ended, All; columns: player, type, reason, issued by, starts, ends or "permanent", report link; "Lift" button with a reason; shows `ends_at` as a countdown with the absolute time in the viewer's timezone; calls `sp_expire_sanctions` on load |
-| `/mod/audit` | Audit log viewer | read-only table; filters for entity, action, actor and date range; keyset pagination by `log_id`; renders `old_value` / `new_value` JSON as readable key and value pairs; actor NULL shown as "system". Needs `audit.read` (moderator and admin both hold it) |
-| `/admin/users` | Users and roles (admin only) | search by username; list with status, roles and active sanctions; row links to `/admin/users/[id]` which shows role badges with Grant and Revoke buttons (reason not needed) and the user's sanction history. Gate with `requireRole("admin", ...)` |
-
-Add the pages to the nav only where needed: `NavTabs.tsx` already shows a Guild Hall tab to moderators and a Vector
-Lab tab to admins. Sub-navigation inside `/mod` can be a simple row of links.
-
-### Report a player (player side)
-
-A route `/report/[userId]` (a page, so it works without JavaScript) with a form: category radio group, description
-textarea (1000 character counter), and hidden `session` and `message` query parameters. The server action calls
-`sp_report_user`, then redirects to the page the player came from with a plain "Thanks, a moderator will look at
-this" status message. Entry points:
-
-- a "Report" link on `/character/[userId]` (character sheet), beside the existing friend and block controls;
-- a "Report" link on each chat line in the camp chat (passes `message` and `session`; chat is built in Phase 5, but
-  add the link now to the roster in `PartySeats` for session context);
-- a "Report" option on friend list rows if there is room.
-
-Do not offer it for yourself. A suspended player cannot report (`sp_report_user` calls `fn_user_active`), so show
-the readable refusal on the page. Optional: a "My reports" list on `/character` from `sp_my_reports`.
-
-### Tests to add to `06_constraint_tests.sql`
-
-Each procedure that COMMITs needs its own `START TRANSACTION` and a restore step, or use `t_expect_msg` for refusals
-(a refused call changes nothing). At minimum:
-
-- refusals with exact messages: NULL actor, suspended actor (11), a player calling a moderator procedure (grant
-  probe: the player has no EXECUTE), a moderator banning ("Only admins can ban users"), sanctioning yourself, a
-  moderator sanctioning staff, a duplicate report, reporting yourself, a message the target did not send,
-  resolving an already resolved report, claiming a report you filed, revoking the last admin;
-- behaviour: report to claim to sanction to resolve chain (statuses, `handled_by`, `resolved_at`, user status
-  flips), lifting a suspension restores `active`, lifting a mute allows the user to post again, lifting a ban needs
-  `user.ban`, `sp_expire_sanctions` after a lift, audit rows exist for each step, and `@audit_actor` stays NULL after
-  failures;
-- grants: after revoking the direct grants, probes prove the player has no `INSERT` on `report` and the moderator
-  has no `INSERT` on `sanction`, no `UPDATE` on `report` and no `UPDATE` on `message` (check
-  `TABLE_PRIVILEGES` for table-level grants, `COLUMN_PRIVILEGES` for `message.is_deleted`).
-
-Then update the totals everywhere (section 14).
+- No new tables. Lifting a sanction sets `ends_at = GREATEST(UTC_TIMESTAMP(), starts_at + 1 second)` and writes an audit
+  row `sanction` / `lift` holding who and why. The mute check, trust score and expiry already honour `ends_at`.
+- A warning never counts as active. It is "on record", has no end date, and affects neither status nor trust.
+- Expiry has two paths: the event every 5 minutes (needs `event_scheduler = ON`, the MySQL 8 default) and a call to
+  `sp_expire_sanctions` when the sanctions page loads, so a server with the scheduler off still converges.
+- Conflict of interest: nobody handles a report they filed or are the subject of, or sanctions or lifts their own
+  sanction. A moderator cannot sanction or lift sanctions on staff, an admin cannot sanction another admin, and only an
+  admin takes over a report that another moderator holds. Sanctions last at most 90 days.
+- The procedures COMMIT, so a caller cannot wrap them in a transaction and roll back (this is why the DEMO step changed).
+- Audit rows never contain message bodies or password hashes. The ER diagram is unchanged.
 
 ## 9. Phase 5: Camp chat and DMs
 
@@ -608,7 +510,7 @@ Keep the direct SELECT and the existing queries. Add only `sp_send_session_messa
 - **Rendering.** Always as text. React escapes it; use `whitespace-pre-wrap`. No HTML, no markdown, no links
   turned into anchors. Emotes: a fixed set of tokens such as `:gg:` mapped to sprites at render time; the database
   stores the token text only.
-- **Report link.** Each line gets a "Report" link to `/report/[userId]?session=...&message=...` from Phase 6.
+- **Report link.** Each line gets a "Report" link to `/report/[userId]?session=...&message=...`; the Phase 6 report page and `sp_report_user` already accept `session` and `message`.
 - **Unread counts** need a read-tracking table (new table `message_read(user_id, session_id or other_id, last_read_message_id)`).
   Treat as optional and cut it first.
 
@@ -778,7 +680,7 @@ Do this last, after the features, but start the accessibility checks early on ea
   Next.js, plus a "smaller choices" table), which covers the 1 mark. Re-read it against what you ship; if you add
   Discord OAuth or Mongo auth, add a line for each.
 - **Final demo rehearsal.** Reload everything from scratch, run `documents/DEMO.md` against the clock (10 minutes),
-  and then run it again on a second machine or a clean checkout. Add moderation and chat steps if you built them,
+  and then run it again on a second machine or a clean checkout. Add chat steps if you built them (the moderation steps already exist),
   and remove the "honest gaps" line for anything now done.
 - **Housekeeping.** `web/README.md` is stale (section 16). Check that nothing sensitive is in the tree
   (`git grep -n -i -E "password|secret|token" -- ':!*.test.ts'` and read the hits, values are never present by design).
@@ -794,7 +696,7 @@ row lengths, palette keys and the 8 colour cap, and fails if a listed name has n
 run it. Draw with the design tokens plus ink `#120e1f` outlines, everything original. Use `<Sprite name scale>` at
 integer scales only; give meaningful sprites an accessible label at the call site.
 
-Already built, so do not redo: the moderation set (`icon-gavel`, `icon-ledger`, `icon-ban`, `icon-mute`,
+Already built, so do not redo: the moderation set (`icon-hide-message`, `icon-restore`, `icon-lift`, `icon-claim`, `icon-users`, `icon-gavel`, `icon-ledger`, `icon-ban`, `icon-mute`,
 `icon-scales`, `icon-report-queue`, `icon-eye-review`, `guild-hall-banner-32`), `icon-flag` for reports, `icon-block`
 and `icon-unblock`, `icon-user-add`, `icon-user-check`, `icon-user-remove`, `icon-chat`, `icon-mail`,
 `icon-mail-incoming`, `icon-accept`, `icon-decline`, `icon-copy`, `icon-link`, rank medals, role icons, seat frames,
@@ -802,7 +704,6 @@ platform glyphs, and the avatars `avatar-01` to `avatar-12`.
 
 | Phase | Needed (16 px unless noted) | Used for |
 |---|---|---|
-| 6 | optional `icon-hide-message`, `icon-restore`, `icon-lift` (an unlocked padlock or broken chain), `icon-claim` (hand or flag) | report actions; the existing set covers the rest, so reuse it first |
 | 5 | `icon-send`, `icon-emoji`, emotes `emote-gg`, `emote-wave`, `emote-laugh`, `emote-cheer`, `emote-sad`, `emote-heart`, `emote-fire`, `emote-gg-wp`; optional `icon-unread` | chat composer, emote picker, unread dot |
 | 5 | badge medals, 32 px: one each for `Veteran`, `Great Teammate`, `Mentor` (the three rows in `badge`; confirm with `SELECT name FROM badge`) | character sheet currently shows text and generic markers |
 | 11 (Discord) | none (the existing `icon-discord` is an original glyph, not the Discord logo) | Discord button |
@@ -815,7 +716,7 @@ A phase is done when every line holds.
 **Database**
 
 - New procedures follow the pattern in section 7 and are granted to the right role in `04_rbac.sql`.
-- Direct grants that the procedures replace are revoked, and a probe proves it.
+- Direct grants that the procedures replace are revoked, and a probe proves it (Phase 6 did this for report, sanction and message moderation).
 - `./database/setup.sh ... --tests` reports every row PASS (the total goes up; no FAIL rows).
 - Seed and `setup.sh` file list updated if you added a file; ER generator updated if you added a table.
 - `bun run check:db` still passes, with new probes for new privileges.
@@ -827,7 +728,7 @@ A phase is done when every line holds.
 
 **Browser walkthrough**, on a freshly reloaded database with the dev switch on, at 1280 px and 375 px, as:
 
-- a **player** (user 1): the new player-facing screens work; the moderator screens return 404;
+- a **player** (user 1): the new player-facing screens work; the moderator screens return 404 (for example `/mod`);
 - a **moderator** (user 9): the queue, detail actions, sanctions and audit pages work; ban is not offered; the admin
   pages return 404;
 - an **admin** (user 10): everything above plus ban, lift a ban and user roles;
@@ -837,9 +738,8 @@ A phase is done when every line holds.
 **Documents**
 
 - README: counts, load order, the "What it does" table and the "Status and known gaps" section.
-- `documents/DEMO.md`: counts, plus any step your change breaks. Known cases: the section "Triggers: a sanction
-  suspends a user" inserts into `sanction` as `pd_mod` and rolls back; once sanctions go through a procedure that
-  commits, change it to call `sp_issue_sanction` then `sp_lift_sanction` (or run it as the admin loader). The RBAC step
+- `documents/DEMO.md`: counts, plus any step your change breaks. The sanction step is already fixed: it shows the
+  denied direct `INSERT` as `pd_mod`, then `sp_issue_sanction` and `sp_lift_sanction`. Known remaining case: the RBAC step
   that runs `SELECT COUNT(*) FROM message` as `pd_api` ("allowed") stops being true if you revoke the player's SELECT
   in Phase 5; switch it to another table or flip the expectation. The MongoDB `docker exec ... mongosh` line changes
   with Mongo auth.
@@ -852,16 +752,15 @@ A phase is done when every line holds.
 2. Read this file and the README's "Architecture" and "Status" sections. Skim `database/04_rbac.sql` and
    `database/09_sessions.sql`: they are the two files whose patterns you will copy.
 3. Check MySQL is up (`mysql.server start` on a Mac) and Docker is running (`docker ps` shows `pairadice-mongo`).
-4. Reload the database with a login path from section 4, with `--tests`. Expect 153 of 153 passed.
+4. Reload the database with a login path from section 4, with `--tests`. Expect 254 of 254 passed.
 5. `./vector/setup.sh`, then start the worker in a second terminal.
-6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (77 pass) and `bun run build`.
+6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (106 pass) and `bun run build`.
    Delete `web/.next` if typecheck shows errors in files you did not touch.
 7. `bun run dev:kc` (Mac) or the socket command (Linux) with `PAIRADICE_DEV_AUTH=1`. Visit `/hearth`, `/board`,
-   `/camp/10`, `/character/1`, `/friends`, `/mod` as user 9 and `/admin/vector` as user 10.
+   `/camp/10`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
 8. Run `bun run check:db` (Mac with Keychain) to see the five logins prove their limits.
-9. Open `database/02_routines.sql` lines for `trg_report_*`, `trg_sanction_*`, `trg_message_bi` and
-   `sp_expire_sanctions`; then `/mod/page.tsx`. That is the start of Phase 6.
-10. Branch, then build the first Phase 6 procedure and its tests before any UI.
+9. Skim `database/12_moderation.sql` (the newest procedure file, a good pattern to copy) and open `/mod` as user 9.
+10. Branch, then build the first Phase 5 procedure and its tests before any UI.
 
 ## 16. Known stale docs and unverified items
 
@@ -870,20 +769,18 @@ Corrected or found stale while writing this:
 - The old `docs/handoff.md` (local, gitignored) described a project around Phases 1 and 2. It said no root README, no
   per-role pools, no Phase 4, 48 tests, 46 sprites, a Mongo container that fails to start, and logins "in progress";
   all of that is out of date. Do not use it.
-- The root README counts were stale and are corrected with this file: 32 procedures (not 23), 7 functions (not 6),
-  55 triggers (not 51), 30 vector sync triggers (not 26). The README's load-order table and layout also omitted
-  `11_profiles.sql`.
+- The root README counts were corrected in Phase 6: 41 procedures, 8 functions, 55 triggers, 1 event, 254 checks.
 - `web/README.md` is stale: it describes a read-only app with a "Sign-in arrives in Phase 2" gate, a single
   `MYSQL_PWD` login, and Phase 1 routes only. It was outside this handoff's scope; refresh it in Phase 7.
 - `bun run test` does not exist; the command is `bun test`.
-- Moderator and player reading `message` directly (section 9), the direct `INSERT` grants (section 8) and the
-  unscheduled `sp_expire_sanctions` are real gaps, not documentation errors.
+- Moderator and player reading `message` directly and the player's direct `INSERT` on `message` and `review`
+  (section 9) are real gaps until Phase 5. Closed in Phase 6: the unscheduled `sp_expire_sanctions` (now
+  `ev_expire_sanctions`) and the moderator and player direct grants on `report`, `sanction` and `message` moderation.
 - Seed users cannot sign in with a password (placeholder hashes). Only `/sign-up` accounts and the dev switch work.
 
-Not verified by running anything on 2026-11-09:
+Not verified on 2026-11-10:
 
-- The live MySQL state (counts here come from the SQL files; `--tests` was not run). A reload and `--tests` run is the
-  first thing to do.
+- The live MySQL state beyond the `--tests` run (254 of 254). Reload and rerun it first.
 - The Keychain item names `pairadice/mongo_root`, `mongo_api` and `mongo_worker`, and the two Discord items. They come
   from the owner's notes; the loader only knows `pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin` and `auth_secret`.
 - That MongoDB authentication works end to end after the port; the branch version was never verified live.

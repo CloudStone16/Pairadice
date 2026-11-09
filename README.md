@@ -11,8 +11,8 @@ the core of the project. The web app shows that design working end to end.
 > **Viva walkthrough:** [`documents/DEMO.md`](documents/DEMO.md) is a 10-minute script in rubric order, with the
 > exact commands and seed IDs.
 >
-> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (moderation UI, chat
-> and DMs, Discord login, MongoDB authentication, polish) with a full spec, the conventions and a first-hour checklist.
+> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (chat and DMs,
+> Discord login, MongoDB authentication, polish) with a full spec, the conventions and a first-hour checklist.
 
 The mascot is a white maneki-neko cat with a die standing on its corner. It is the sprite `mascot-cat` in
 `web/sprites/src/`, it is generated into the site favicon by `bun run sprites`, and the Discord application icon is
@@ -43,6 +43,9 @@ The mascot is a white maneki-neko cat with a die standing on its corner. It is t
 | **Character sheet** (`/character/[id]`) | Games, ranks, languages, badges, trust meter, friend / block buttons | `v_player_card`; badges, ratings and trust are kept up to date by triggers |
 | **Friends** (`/friends`) | Search players, requests, friends, blocked list | `sp_send_friend_request` … `sp_unblock_user`; `fn_is_blocked` hides blocked pairs everywhere |
 | **Sign in / up** | Email + password on a "Press start" title screen | `sp_register_user`; argon2id hashes, HMAC-hashed session tokens |
+| **Report a player** (`/report/[userId]`) | A "Report" link on the character sheet, camp roster and friend list; "My reports" on `/character` shows status only | `sp_report_user` (rate limited, evidence must be visible to the reporter), `sp_my_reports` |
+| **Guild Hall** (`/mod`, moderator and admin) | Overview, report queue (`/mod/reports`), report detail with dismiss / warn / mute / suspend / ban and hide message, sanctions with lift (`/mod/sanctions`), audit log viewer (`/mod/audit`) | `sp_claim_report`, `sp_resolve_report`, `sp_issue_sanction`, `sp_lift_sanction`, `sp_moderate_message`; every action writes `audit_log`; `ev_expire_sanctions` ends suspensions every 5 minutes |
+| **Users and roles** (`/admin/users`, admin only) | Search players, grant or revoke roles, see sanction history | `sp_grant_role`, `sp_revoke_role` (refuse removing the last admin or your own admin role) |
 | **Vector Lab** (`/admin/vector`, admin only) | Read, update and delete embeddings live, and watch the outbox drain | `embedding_outbox` + 30 sync triggers → worker → MongoDB |
 
 **Privacy rules that hold everywhere:** gamertags, the Discord invite and the camp chat are shown only to the host
@@ -67,7 +70,7 @@ flowchart LR
 
   subgraph MySQL["MySQL 8 — pairadice (source of truth)"]
     T[("45 tables<br/>4 views")]
-    R["32 procedures · 7 functions<br/>55 triggers"]
+    R["41 procedures · 8 functions<br/>55 triggers · 1 event"]
     OB[("embedding_outbox")]
   end
 
@@ -101,8 +104,11 @@ Three ideas carry the design:
    `friendship` or `user_block`, and cannot execute `sp_recommend_sessions`. A signed-in request, read or write, runs
    on the viewer's own role login (`pairadice_player`, `pairadice_moderator` or `pairadice_admin`), and fails closed
    to the anonymous login if the request's session does not match. Sign-in uses `pairadice_auth`, the only role that
-   can touch credentials. `pairadice_player` has no direct DML on sessions, participants, friendships or blocks; it
-   writes only through DEFINER procedures, which reject NULL, suspended and banned actors. `pairadice_admin` holds
+   can touch credentials. `pairadice_player` has no direct DML on sessions, participants, friendships, blocks or reports; it
+   writes only through DEFINER procedures, which reject NULL, suspended and banned actors. `pairadice_moderator` can read
+   reports, sanctions, the audit log and users, but writes only through procedures too (`12_moderation.sql`), which add
+   conflict-of-interest and staff-rank rules and write the audit rows. The only direct player writes left are `INSERT` on
+   `message` and `review` (Phase 5). `pairadice_admin` holds
    only SELECT, INSERT, UPDATE, DELETE and EXECUTE, with no DDL and no GRANT OPTION. The in-app `role` / `permission` tables and `fn_has_permission` are a second
    check inside triggers.
 3. **The outbox pattern keeps the two stores in sync.** Triggers record "player 12 changed" in `embedding_outbox` in
@@ -176,11 +182,12 @@ Three ideas carry the design:
 |---|---|---|
 | Tables | 45 | `database/01_schema.sql` |
 | Views | 4 | `v_open_sessions`, `v_player_card`, `v_session_roster` (02), `v_outbox_dead` (07) |
-| Functions | 7 | `fn_is_blocked`, `fn_are_friends`, `fn_user_active`, `fn_trust_score`, `fn_has_permission`, `fn_platform_compatible`, `fn_local_time` |
-| Procedures | 32 | recommendations (02), outbox (07), auth (08), quest lifecycle (09), friends and blocks (10), profile editing (11) |
+| Functions | 8 | `fn_is_blocked`, `fn_are_friends`, `fn_user_active`, `fn_trust_score`, `fn_has_permission`, `fn_platform_compatible`, `fn_local_time`, `fn_staff_rank` (12) |
+| Procedures | 41 | recommendations (02), outbox (07), auth (08), quest lifecycle (09), friends and blocks (10), profile editing (11), moderation and roles (12) |
+| Events | 1 | `ev_expire_sanctions` (12): every 5 minutes runs `sp_expire_sanctions` (needs `event_scheduler = ON`, the MySQL 8 default) |
 | Triggers | 55 | 23 integrity / derived-value / audit (02), 30 vector sync (07), 2 recommendation outcome (09) |
 | MySQL roles | 6 | `pairadice_web_ro`, `pairadice_auth`, `pairadice_player`, `pairadice_moderator`, `pairadice_admin`, `pairadice_vec_worker` |
-| Database checks | 153 | `database/06_constraint_tests.sql`: must-fail statements, exact-error assertions, grant probes and behaviour checks |
+| Database checks | 254 | `database/06_constraint_tests.sql`: must-fail statements, exact-error assertions, grant probes and behaviour checks |
 | Sample queries | 18 | `database/05_sample_queries.sql`: joins, nested, correlated, recursive CTEs, windows, procedures |
 | MongoDB collections | 2 | `player_embeddings`, `session_embeddings` (strict `$jsonSchema` validators, B-tree and vector indexes) |
 
@@ -203,8 +210,9 @@ generated by [`documents/tools/gen_erd.py`](documents/tools/gen_erd.py), and pag
 | `09_sessions.sql` | Quest lifecycle procedures and recommendation-outcome triggers |
 | `10_social.sql` | Friend and block procedures |
 | `11_profiles.sql` | Profile-editing procedures (self-only writes) |
+| `12_moderation.sql` | Report, sanction, message-moderation and role procedures, `fn_staff_rank`, and the `ev_expire_sanctions` event |
 
-`database/setup.sh` loads them in the order 01, 02, 08, 09, 10, 11, 03, 04, 07 (tests last). You do not need to load them by hand.
+`database/setup.sh` loads them in the order 01, 02, 08, 09, 10, 11, 12, 03, 04, 07 (tests last). You do not need to load them by hand.
 
 ---
 
@@ -227,8 +235,8 @@ generated by [`documents/tools/gen_erd.py`](documents/tools/gen_erd.py), and pag
 ./database/setup.sh -u <admin_login> -S /var/run/mysqld/mysqld.sock -y --tests --socket-logins "$USER"
 ```
 
-`--tests` runs 153 checks (must-fail statements, exact-error assertions, grant probes and behaviour checks) and
-reports `153/153 passed`. Run `./database/setup.sh --help` for every
+`--tests` runs 254 checks (must-fail statements, exact-error assertions, grant probes and behaviour checks) and
+reports `254/254 passed`. Run `./database/setup.sh --help` for every
 option. The script **drops and recreates** the `pairadice` database, and `-y` skips the confirmation.
 
 `--socket-logins` creates `pd_web_sock`, `pd_auth_sock`, `pd_player_sock`, `pd_mod_sock` and `pd_admin_sock`, one
@@ -286,7 +294,7 @@ shell, never in a file.
 |---|---|
 | Types | `bun run typecheck` |
 | Lint | `bun run lint` |
-| Unit tests | `bun test` (77 tests) |
+| Unit tests | `bun test` (106 tests) |
 | Production build | `bun run build` |
 | Database logins and grants | `bun run check:db` (needs the Keychain items) |
 
@@ -295,12 +303,12 @@ shell, never in a file.
 ## Repository layout
 
 ```
-database/     SQL files 01–11 and setup.sh (MySQL)
+database/     SQL files 01–12 and setup.sh (MySQL)
 vector/       MongoDB vector store: setup.sh, worker, backfill, RUD demo (Node)
   src/          config, embedding, source text, sync, search, schema
   scripts/      init-db.js, backfill.js, worker.js, demo-rud.js
 web/          Next.js app
-  src/app/      routes: (auth) sign-in/up, (hearth) board, camp, hearth, character, friends, party, mod, admin
+  src/app/      routes: (auth) sign-in/up, (hearth) board, camp, hearth, character, friends, party, mod (Guild Hall), report, admin (vector, users)
   src/lib/      db pools per role, auth, queries, mutations, vector client
   sprites/      pixel-art sources (JSON) → public/sprites/*.svg
 documents/    ER diagram (drawio), its generator, rubric PDF, DEMO.md
@@ -314,16 +322,16 @@ documents/    ER diagram (drawio), its generator, rubric PDF, DEMO.md
 |---|---:|---|
 | ER diagram | 2 | `documents/pairadice_erd.drawio` (9 pages, Chen notation) |
 | Relational schema with keys and constraints | 3 | `01_schema.sql`; drawio page 9 |
-| SQL DDL with constraints | 4 | `01_schema.sql`: PK/FK/UNIQUE/CHECK; 153 checks in `06` |
+| SQL DDL with constraints | 4 | `01_schema.sql`: PK/FK/UNIQUE/CHECK; 254 checks in `06` |
 | NoSQL / vector DB creation | 4 | `vector/src/schema.js` (validators, indexes, vector indexes, roles), `vector/scripts/init-db.js` |
 | Technology justification | 1 | [Technology justification](#technology-justification) above |
-| DML | 4 | `03_seed.sql`; every app write is a procedure in 08–11 |
+| DML | 4 | `03_seed.sql`; every app write is a procedure in 08–12 (except chat and review inserts, Phase 5) |
 | Nested / correlated / recursive queries and joins | 4 | `05_sample_queries.sql` Q1–Q13 |
-| Procedures, functions, triggers, CTEs | 6 | `02`, `07`–`11`; recursive CTEs in Q8–Q10 |
+| Procedures, functions, triggers, CTEs | 6 | `02`, `07`–`12`; recursive CTEs in Q8–Q10 |
 | NoSQL / vector feature with read, update, delete | 7 | `/admin/vector` Vector Lab; `vector/scripts/demo-rud.js`; hybrid Hearth recommendations |
 | Next.js UI | 3 | `web/` |
 | Backend / API + DB integration | 2 | Server actions → per-role pools → procedures (`web/src/lib/db.ts`, `web/src/lib/mutations/`) |
-| Authentication with 2+ roles and RBAC in the DB | 4 | `04_rbac.sql`, `08_auth.sql`, per-role logins, `requireRole` guards |
+| Authentication with 2+ roles and RBAC in the DB | 4 | `04_rbac.sql`, `08_auth.sql`, per-role logins, `requireRole` guards; the moderator role works end to end in `/mod` |
 | Documentation and Git/GitHub | 2 | This README, `documents/DEMO.md`, commit history |
 | Originality, individual contribution, viva | 4 | `documents/DEMO.md` |
 
@@ -333,16 +341,17 @@ documents/    ER diagram (drawio), its generator, rubric PDF, DEMO.md
 
 Done: the schema, routines, RBAC and tests; the MongoDB vector store with outbox sync and hybrid ranking; email
 sign-in with per-role database logins; hosting, joining and managing quests; friends and blocks; profile editing
-(`/character/edit`: about, languages, tags, gamertags, per-game rank/modes/roles and weekly availability, all
-written through self-only procedures in `database/11_profiles.sql`); and the admin Vector Lab.
+(`/character/edit`, written through self-only procedures in `database/11_profiles.sql`); the admin Vector Lab; and
+**moderation** (Phase 6): player reports, the `/mod` Guild Hall (queue, report detail, sanctions, audit log) and admin
+user and role management at `/admin/users`, all written through `database/12_moderation.sql`. Reports, sanctions and
+message hiding no longer have direct grants, and expired sanctions are now ended by the `ev_expire_sanctions` event
+(the sanctions page also runs the expiry procedure on load, so a server with the scheduler off still converges).
 
 Not done yet (each has a full spec in [`documents/HANDOFF.md`](documents/HANDOFF.md)):
 
-- **Moderation UI** (Phase 6, next). Reports, sanctions and the audit log work in SQL (see the demo), but the `/mod`
-  Guild Hall page is a placeholder. Planned: report queue, report detail with dismiss / warn / mute / suspend / ban,
-  a sanctions list with lift and expiry, an audit log viewer, admin role management, and a "report a player" form.
 - **Camp chat and DMs** (Phase 5). The `message` table and its trigger exist, and camp chat and recent DMs are shown
-  read-only, but nobody can send a message yet.
+  read-only, but nobody can send a message yet. The player still holds direct `INSERT` on `message` and `review`; Phase 5
+  will replace both with procedures.
 - **MongoDB authentication.** Atlas Local runs without auth and listens on `127.0.0.1` only. The `pdVecReader` /
   `pdVecWriter` roles are defined but not yet bound to users.
 - **Discord login.** The `auth_account` table supports it, but it stays switched off until a Discord app is set up.

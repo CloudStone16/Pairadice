@@ -16,7 +16,7 @@ cd Pairadice
 ADMIN=<your MySQL admin login>          # e.g. root, or your auth_socket admin login
 SOCK=/var/run/mysqld/mysqld.sock
 
-./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 153/153 passed
+./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 254/254 passed
 ./vector/setup.sh                                                               # needs Docker running
 ```
 
@@ -60,9 +60,9 @@ Have these open: <http://127.0.0.1:3000/board>, `documents/pairadice_erd.drawio`
 | 1 | `aarav_plays` | the default "play as" player; plays Valorant as a Duelist |
 | 2 | `priya_gg` | hosts session 10 |
 | 4 | `lukas_mc` | not yet Aarav's friend, so useful for the friend-request step |
-| 7 | `jake_fn` | target of the sanction demo (rolled back) |
+| 7 | `jake_fn` | target of the sanction and report demos (the sanction is lifted again) |
 | 9 | `mod_alex` | moderator |
-| 10 | `admin_sam` | admin, so has access to `/mod` and the Vector Lab |
+| 10 | `admin_sam` | admin, so has access to `/mod`, `/admin/users` and the Vector Lab |
 | 11 | `toxic_tyler` | suspended; his open session 9 does not appear on the board |
 | 12 | `kiara_ctrl` | the recursive-CTE example |
 
@@ -108,12 +108,12 @@ the other kinds of constraint:
   session's game.
 
 ```bash
-grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 131, plus 22 behaviour rows = 153
+grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 204, plus 50 behaviour rows = 254
 grep -o "t_expect_error('[^']*'" database/06_constraint_tests.sql | head -12
 ```
 
-> "153 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
-> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 153/153 passed."
+> "254 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
+> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 254/254 passed."
 
 ## 2:30 – 4:00 · DML and queries (4 marks)
 
@@ -145,30 +145,40 @@ pd -u "$ADMIN" -e "CALL sp_recommend_sessions(1, 5, FALSE)"
 `FALSE` means "do not log". With `TRUE` it writes `match_recommendation` rows, and a trigger later marks them
 `joined` when the player is accepted.
 
-**Triggers: a sanction suspends a user and writes the audit log.** This runs as the **moderator** login and is
-rolled back, so nothing changes:
+**Procedures and triggers: a sanction suspends a user, and the moderator cannot bypass the procedure.** First the
+proof that the direct write is gone, as the **moderator** login:
+
+```bash
+pd -u pd_mod_sock -e "INSERT INTO sanction (user_id, issued_by, sanction_type, reason, ends_at)
+  VALUES (7, 9, 'suspend', 'Demo', UTC_TIMESTAMP() + INTERVAL 1 DAY)"
+# ERROR 1142 (42000): INSERT command denied to user ... for table 'sanction'
+```
+
+Then the allowed path, one session so `@sid` survives. The procedure commits its own transaction, so this changes
+data until the lift at the end:
 
 ```bash
 pd -u pd_mod_sock -e "
-START TRANSACTION;
-INSERT INTO sanction (user_id, issued_by, sanction_type, reason, ends_at)
-VALUES (7, 9, 'suspend', 'Demo: griefing', UTC_TIMESTAMP() + INTERVAL 1 DAY);
+CALL sp_issue_sanction(9, 7, 'suspend', 'Demo suspension', UTC_TIMESTAMP() + INTERVAL 1 DAY, NULL, @sid);
 SELECT user_id, username, status FROM users WHERE user_id = 7;
 SELECT entity, action, new_value FROM audit_log ORDER BY log_id DESC LIMIT 2;
-ROLLBACK;
-SELECT status AS after_rollback FROM users WHERE user_id = 7;"
+CALL sp_lift_sanction(9, @sid, 'Demo over');
+SELECT status AS after_lift FROM users WHERE user_id = 7;
+SELECT entity, action, new_value FROM audit_log ORDER BY log_id DESC LIMIT 2;"
 ```
 
-Expected output: Jake is `suspended`, there are two audit rows (`users status_change`, `sanction issue`), and after
-the rollback he is `active` again.
+Expected output: Jake is `suspended`, two audit rows appear (`users status_change`, `sanction issue`), and after the
+lift he is `active` again with a `sanction lift` row that carries the reason.
 
-> "Before the insert, a trigger checks `fn_has_permission(issued_by, 'user.sanction')`. A player cannot issue a
-> sanction, and a moderator cannot issue a **ban**; only admins hold `user.ban`. Both are among the 153 checks."
+> "The moderator has no INSERT on `sanction` and no UPDATE on `report`. Every write goes through a procedure that
+> checks `fn_has_permission`, the staff rank (a moderator cannot sanction staff), conflict of interest and duration
+> limits, then lets the triggers flip the status and write the audit log. A player cannot issue a sanction, and a
+> moderator cannot issue a **ban**; only admins hold `user.ban`. All of that is among the 254 checks."
 
 **Transaction with a row lock.** `sp_accept_participant` locks the session row (`SELECT … FOR UPDATE`) before it
 fills a seat, so two accepts at the same moment cannot overbook. You will see it live in the UI step below.
 
-## 5:30 – 6:30 · Authentication and RBAC in the database (4 marks)
+## 5:30 – 7:00 · Authentication and RBAC in the database (4 marks)
 
 Three MySQL roles, three different answers to the same kind of question:
 
@@ -206,9 +216,15 @@ Then in the browser:
    the only thing stored in `auth_token`.
 2. Visit `/mod` as that new player: the page returns **404**, because the guard does not reveal that it exists.
    Then **sign out**. A real session hides the "play as" menu and always wins over it, so the menu only comes back
-   after sign-out. Switch "play as" to **10 `admin_sam`** and `/mod` (Guild Hall) loads, as does `/admin/vector`.
+   after sign-out.
+3. **Guild Hall.** Switch "play as" to **1 `aarav_plays`**, open `/character/7` and click **Report** on `jake_fn`
+   (`sp_report_user`). Switch to **9 `mod_alex`**, open `/mod/reports`, choose **Take it** (`sp_claim_report`), then
+   **Suspend 1 day** with a reason and confirm (`sp_issue_sanction`). Open `/mod/audit` to show the rows, and lift
+   the sanction from `/mod/sanctions` (`sp_lift_sanction`). As mod_alex, `/admin/users` returns **404**; as the
+   player, `/mod` does. Switch to **10 `admin_sam`**: `/mod` and `/admin/vector` load, and `/admin/users/12` lets
+   him grant or revoke roles (`sp_grant_role`, `sp_revoke_role`).
 
-## 6:30 – 8:30 · NoSQL vector store: create, read, update, delete (4 + 7 marks)
+## 7:00 – 8:45 · NoSQL vector store: create, read, update, delete (4 + 7 marks)
 
 **Creation (4).** Show `vector/src/schema.js`: the strict `$jsonSchema` validators, the B-tree indexes, and the
 vector search indexes (cosine, 384 dims, with filter fields). Then a live document:
@@ -235,7 +251,7 @@ docker exec -it pairadice-mongo mongosh pairadice_vec --quiet --eval \
 As a backup, the terminal version is `node vector/scripts/demo-rud.js`. It runs the same create, read, update and
 delete steps and prints each one.
 
-## 8:30 – 9:30 · Next.js UI and backend integration (3 + 2 marks)
+## 8:45 – 9:40 · Next.js UI and backend integration (3 + 2 marks)
 
 1. As **1 `aarav_plays`**, open `/board`. Tyler's open session 9 is missing (host suspended). Open session 10,
    **Chill unrated**: Priya's gamertag is hidden.
@@ -253,12 +269,12 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 > picks the MySQL login for the user's role and calls one procedure. There is no SQL in the browser and no business
 > rule duplicated in TypeScript."
 
-## 9:30 – 10:00 · Wrap-up
+## 9:40 – 10:00 · Wrap-up
 
 - Docs: the README (architecture, technology justification, rubric map) and this script. Git history: small,
   focused commits for each piece.
-- Honest gaps: Discord login, chat, and the moderation UI are not built yet. Moderation works in
-  SQL, as shown above.
+- Honest gaps: Discord login and chat sending (Phase 5) are not built yet, and the player still has direct INSERT on
+  `message` and `review` until then. MongoDB runs without authentication on localhost.
 
 ---
 
@@ -271,4 +287,5 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 | A neighbour list is empty right after an edit | The vector index is eventually consistent (hundreds of ms); refresh |
 | "Upcoming" sessions are in the past | Reload: `./database/setup.sh … -y --tests`, then `./vector/setup.sh` |
 | "Knock to join" refused after an earlier rehearsal | Aarav is already in camp 10; reload the database |
-| Test summary below 153/153 | Reload once and rerun before investigating |
+| "You already reported this player" | Aarav has an open report on Jake from a rehearsal; reload the database |
+| Test summary below 254/254 | Reload once and rerun before investigating |
