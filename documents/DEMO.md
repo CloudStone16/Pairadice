@@ -37,7 +37,7 @@ Open three terminals:
 
 | Terminal | Command |
 |---|---|
-| **A** (worker) | `MONGO_URI="mongodb://127.0.0.1:27018/?directConnection=true" node vector/scripts/worker.js --watch` |
+| **A** (worker) | `. vector/scripts/env-from-keychain.sh && node vector/scripts/worker.js --watch` (macOS; this sets the `pdWorker` `MONGO_URI` from the Keychain and prints nothing. On Linux export `MONGO_URI` yourself, see the README) |
 | **B** (web) | the `bun run dev` command from the README, with `PAIRADICE_DEV_AUTH=1` |
 | **C** (SQL) | stays at a shell; the `mysql` commands below run here |
 
@@ -230,10 +230,25 @@ Then in the browser:
 **Creation (4).** Show `vector/src/schema.js`: the strict `$jsonSchema` validators, the B-tree indexes, and the
 vector search indexes (cosine, 384 dims, with filter fields). Then a live document:
 
+MongoDB requires a login. The password goes in through the environment (`PW` is passed by name, so it never appears
+on a command line or in `ps`). In terminal C, with `MONGO_API_PWD` exported (macOS: `. vector/scripts/env-from-keychain.sh`):
+
 ```bash
-docker exec -it pairadice-mongo mongosh pairadice_vec --quiet --eval \
-  'db.player_embeddings.findOne({_id: 12}, {embedding: {$slice: 4}, source_text: 1, model: 1, updated_at: 1})'
+mp() { PW="$MONGO_API_PWD" docker exec -e PW pairadice-mongo mongosh --quiet --eval \
+  "const d = db.getSiblingDB('pairadice_vec'); d.auth('pdApi', process.env.PW); $1"; }
+mp "printjson(d.player_embeddings.findOne({_id: 12}, {embedding: {\$slice: 4}, source_text: 1, model: 1, updated_at: 1}))"
 ```
+
+**Authentication proof (20 seconds).** Same helper, then an anonymous attempt:
+
+```bash
+docker exec pairadice-mongo mongosh --quiet --eval "db.getSiblingDB('pairadice_vec').getCollectionNames()"
+mp "d.player_embeddings.insertOne({_id: 9999})"
+```
+
+> "The first command has no login and fails with 'requires authentication'. The second is the web app's read-only user
+> `pdApi`: it can find, but its insert fails with 'Unauthorized'. Only `pdWorker` can write, and the root user is used
+> only by setup."
 
 **RUD (7).** As **10 `admin_sam`**, open `/admin/vector` (the Vector Lab). Keep terminal A visible.
 
@@ -249,7 +264,7 @@ docker exec -it pairadice-mongo mongosh pairadice_vec --quiet --eval \
 > cannot be lost. The worker re-embeds only if the text hash changed. Hard filters stay in SQL; vectors only rerank.
 > The Hearth blends 0.6 × vector + 0.4 × the SQL score."
 
-As a backup, the terminal version is `node vector/scripts/demo-rud.js`. It runs the same create, read, update and
+As a backup, the terminal version is `node vector/scripts/demo-rud.js`. It writes through the outbox drain, so run it with the `pdWorker` `MONGO_URI` (terminal A's environment; the same Keychain script sets it). It runs the same create, read, update and
 delete steps and prints each one.
 
 ## 8:45 – 9:40 · Next.js UI and backend integration (3 + 2 marks)
@@ -279,7 +294,7 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 
 - Docs: the README (architecture, technology justification, rubric map) and this script. Git history: small,
   focused commits for each piece.
-- Honest gaps: Discord login is not built, MongoDB runs without authentication on localhost, chat polls every 4
+- Honest gaps: Discord login is not built, the worker still uses the general MySQL login instead of its own `pairadice_vec_worker` login, chat polls every 4
   seconds instead of using websockets, and unread counts are not built. Two `message` indexes are possible but not
   applied, because existing tables are not to be altered.
 

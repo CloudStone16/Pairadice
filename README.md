@@ -11,8 +11,8 @@ the core of the project. The web app shows that design working end to end.
 > **Viva walkthrough:** [`documents/DEMO.md`](documents/DEMO.md) is a 10-minute script in rubric order, with the
 > exact commands and seed IDs.
 >
-> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (MongoDB
-> authentication, Discord login, polish) with a full spec, the conventions and a first-hour checklist.
+> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (Discord
+> login, polish, the worker MySQL login) with a full spec, the conventions and a first-hour checklist.
 
 The mascot is a white maneki-neko cat with a die standing on its corner. It is the sprite `mascot-cat` in
 `web/sprites/src/`, it is generated into the site favicon by `bun run sprites`, and the Discord application icon is
@@ -150,6 +150,9 @@ Three ideas carry the design:
   documents.
 - **Easy to rebuild.** MongoDB holds no facts of its own. Its documents are linked to SQL rows by id, so a full
   backfill rebuilds them from MySQL at any time.
+- **Authenticated, least privilege.** MongoDB requires a login. The web app connects as `pdApi` (role `pdVecReader`:
+  find and index listing only), and the worker and backfill connect as `pdWorker` (role `pdVecWriter`). The root user
+  `pdRoot` is used only by setup. A leaked web credential therefore cannot change or delete embeddings.
 - **Local model, no API keys.** `Xenova/all-MiniLM-L6-v2` runs inside Node through `@huggingface/transformers` and
   works offline after the first download.
 
@@ -259,15 +262,41 @@ On macOS the development convention is to keep those passwords in the Keychain (
 `pairadice/<key>`, with keys `pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin` and `auth_secret`). For example, add
 one with `security add-generic-password -a pairadice -s pairadice/pd_web -w` (it prompts for the value), and
 export `PD_WEB_PWD="$(security find-generic-password -a pairadice -s pairadice/pd_web -w)"` before running
-`setup.sh`. Never write the real values into a file.
+`setup.sh`. Never write the real values into a file. To give the vector worker its own MySQL login, add
+`--worker-user NAME` (role `pairadice_vec_worker`, password from `PD_WORKER_PWD` or a prompt).
 
 ### 2. Start the vector store (optional)
 
+MongoDB requires authentication. `vector/setup.sh` needs three passwords, read from the environment or a hidden
+prompt: `MONGO_ROOT_PWD` (root user `pdRoot`, used only by setup), `MONGO_API_PWD` (user `pdApi`, read-only, for the web
+app) and `MONGO_WORKER_PWD` (user `pdWorker`, read/write, for the worker, backfill and `demo-rud.js`).
+
 ```bash
-./vector/setup.sh                       # Atlas Local container on 127.0.0.1:27018, collections, indexes, full backfill
-export MONGO_URI="mongodb://127.0.0.1:27018/?directConnection=true"
-node vector/scripts/worker.js --watch    # keeps MongoDB in sync with MySQL edits
+./vector/setup.sh                       # Atlas Local container on 127.0.0.1:27018, users, collections, indexes, full backfill
+./vector/setup.sh --recreate            # once, to switch an older unauthenticated container to auth (wipes Mongo data)
 ```
+
+`--recreate` removes the container and its volumes. That is safe because MongoDB holds no facts of its own: the
+backfill rebuilds everything from MySQL. Setup refuses to continue if it finds a container that still allows anonymous
+access.
+
+Run the worker with the `pdWorker` URI. The URI contains a password, so build it from environment variables and never
+write it to a file.
+
+```bash
+# macOS: the passwords come from Keychain items pairadice/mongo_root, mongo_api and mongo_worker (account pairadice)
+. vector/scripts/env-from-keychain.sh    # exports the three passwords and the worker MONGO_URI; prints nothing
+node vector/scripts/worker.js --watch    # keeps MongoDB in sync with MySQL edits
+
+# Linux: export the passwords yourself, then build the URI with the password URL-encoded by node
+read -rs MONGO_WORKER_PWD; export MONGO_WORKER_PWD
+enc="$(node -e 'process.stdout.write(encodeURIComponent(process.env.MONGO_WORKER_PWD))')"
+export MONGO_URI="mongodb://pdWorker:${enc}@127.0.0.1:27018/?directConnection=true&authSource=pairadice_vec"
+node vector/scripts/worker.js --watch
+```
+
+The web app uses the read-only `pdApi` URI in its own `MONGO_URI`. On macOS `bun run dev:kc` builds it from the
+Keychain item `pairadice/mongo_api`. Without it the Vector Lab shows Mongo as unavailable.
 
 Run `vector/setup.sh` again whenever you reload MySQL; the backfill reconciles both stores.
 
@@ -283,7 +312,7 @@ PAIRADICE_DEV_AUTH=1 bun run dev
 ```
 
 With the Keychain items above, `bun run dev:kc` does the same thing: `web/scripts/dev-keychain.sh` loads the five
-logins and `AUTH_SECRET` into the environment and starts `bun run dev` (add `PAIRADICE_DEV_AUTH=1` for the "play as"
+logins, `AUTH_SECRET`, the Discord items if present and the `pdApi` `MONGO_URI` into the environment and starts `bun run dev` (add `PAIRADICE_DEV_AUTH=1` for the "play as"
 switch). `bun run check:db` uses the same loader and proves each login's identity plus one forbidden action each.
 
 Then open <http://127.0.0.1:3000>. `PAIRADICE_DEV_AUTH=1` adds a development-only "play as" switch to the header,
@@ -292,7 +321,16 @@ the old session token, and sign-up errors are fixed messages. The seed accounts 
 a password. To try real sign-in, create an account at `/sign-up`.
 
 Every environment variable is listed by name in [`web/.env.example`](web/.env.example). Real values belong in your
-shell, never in a file.
+shell, never in a file. The vector store uses these:
+
+| Variable | Used by | Meaning |
+|---|---|---|
+| `MONGO_ROOT_PWD` | `vector/setup.sh` | Root user `pdRoot` password (setup only) |
+| `MONGO_API_PWD` | `vector/setup.sh`, `dev-keychain.sh` | Password of `pdApi` (read-only) |
+| `MONGO_WORKER_PWD` | `vector/setup.sh`, `env-from-keychain.sh` | Password of `pdWorker` (read/write) |
+| `MONGO_URI` | web app, worker, backfill, `demo-rud.js` | Per process: the `pdApi` URI for the web app, the `pdWorker` URI for the others. Form `mongodb://USER:PASSWORD@127.0.0.1:27018/?directConnection=true&authSource=pairadice_vec` |
+| `MONGO_ROOT_URI` | `vector/scripts/init-db.js` | Root URI, set by `setup.sh` only |
+| `PD_WORKER_PWD` | `database/setup.sh` | Password for the optional `--worker-user` MySQL login |
 
 | Check | Command (in `web/`) |
 |---|---|
@@ -344,7 +382,9 @@ documents/    ER diagram (drawio), its generator, rubric PDF, DEMO.md
 
 ## Status and known gaps
 
-Done: the schema, routines, RBAC and tests; the MongoDB vector store with outbox sync and hybrid ranking; email
+Done: the schema, routines, RBAC and tests; the MongoDB vector store with outbox sync and hybrid ranking and
+**MongoDB authentication** (least-privilege users `pdApi` and `pdWorker`, verified live: anonymous access fails, `pdApi`
+cannot write, `pdWorker` can); email
 sign-in with per-role database logins; hosting, joining and managing quests; friends and blocks; profile editing
 (`/character/edit`, written through self-only procedures in `database/11_profiles.sql`); the admin Vector Lab; and
 **moderation** (Phase 6): player reports, the `/mod` Guild Hall (queue, report detail, sanctions, audit log) and admin
@@ -356,10 +396,11 @@ medals, all written through `database/13_chat.sql`. The player role now has no d
 
 Not done yet (each has a full spec in [`documents/HANDOFF.md`](documents/HANDOFF.md)):
 
-- **MongoDB authentication.** Atlas Local runs without auth and listens on `127.0.0.1` only. The `pdVecReader` /
-  `pdVecWriter` roles are defined but not yet bound to users.
 - **Discord login.** The `auth_account` table supports it, but it stays switched off until a Discord app is set up.
 - **Polish** (Phase 7): empty / loading / error states, an accessibility and mobile pass, and a final docs and demo sync.
+- **Worker MySQL login.** `database/setup.sh --worker-user` can create a login for `pairadice_vec_worker`, but it is not
+  created on the owner's machine yet, so the worker still uses `MYSQL_USER` / `MYSQL_PWD`. Check the role's grants against
+  what the worker reads and updates before switching.
 
 Known gaps and limits:
 
