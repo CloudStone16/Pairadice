@@ -178,6 +178,7 @@ GRANT SELECT ON pairadice.v_player_card    TO 'pairadice_web_ro';
 -- role has no INSERT on users or user_role and cannot grant itself moderator or admin. It reads only what
 -- a session lookup needs: no bios, sessions, messages or audit rows.
 GRANT EXECUTE ON PROCEDURE pairadice.sp_register_user TO 'pairadice_auth';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_discord_login TO 'pairadice_auth';   -- Discord sign-in (14_discord.sql); not player, not web_ro
 GRANT SELECT ON pairadice.auth_account TO 'pairadice_auth';
 GRANT SELECT, INSERT ON pairadice.auth_token TO 'pairadice_auth';
 GRANT UPDATE (revoked_at) ON pairadice.auth_token TO 'pairadice_auth';

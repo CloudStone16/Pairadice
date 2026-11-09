@@ -808,6 +808,102 @@ INSERT INTO tmp_test_results SELECT 'CLEANUP: chat test data is removed and user
   IF((SELECT COUNT(*) FROM review) = @c_rv0 AND (SELECT COUNT(*) FROM message WHERE message_id > @c_m0) = 0
      AND (SELECT status FROM users WHERE user_id = 5) = @c_st5 AND (SELECT review_count FROM users WHERE user_id = 2) = @c_rc2, 'PASS', 'FAIL'), NULL;
 
+-- ============================================================ Discord sign-in (14_discord.sql)
+SELECT IFNULL(MAX(user_id), 0)    INTO @d_u0  FROM users;
+SELECT IFNULL(MAX(auth_id), 0)    INTO @d_ar0 FROM auth_account;
+SELECT IFNULL(MAX(log_id), 0)     INTO @d_a0  FROM audit_log;
+SELECT COUNT(*) INTO @d_users0 FROM users;
+SELECT COUNT(*) INTO @d_auth0  FROM auth_account;
+SELECT COUNT(*) INTO @d_ur0    FROM user_role;
+SELECT SUBSTRING_INDEX(email, '@', 1) INTO @d_local1 FROM auth_account WHERE user_id = 2 AND provider = 'email' LIMIT 1;
+
+-- first sign-in creates the account, the second returns the same id
+CALL sp_discord_login('200000000000000001', 'New Player', 'New Player', 'Asia/Kolkata', @d_n1);
+CALL sp_discord_login('200000000000000001', 'Different Hint', 'Other Name', 'UTC', @d_n1b);
+INSERT INTO tmp_test_results SELECT 'DISCORD: first login creates user, discord auth row and player role; repeat returns the same id',
+  IF(@d_n1 > @d_u0 AND @d_n1 = @d_n1b
+     AND (SELECT COUNT(*) FROM users WHERE user_id > @d_u0) = 1
+     AND (SELECT username FROM users WHERE user_id = @d_n1) = 'new_player'
+     AND (SELECT display_name FROM users WHERE user_id = @d_n1) = 'New Player'
+     AND (SELECT timezone FROM users WHERE user_id = @d_n1) = 'Asia/Kolkata'
+     AND (SELECT COUNT(*) FROM auth_account WHERE user_id = @d_n1 AND provider = 'discord' AND provider_user_id = '200000000000000001'
+            AND email IS NULL AND password_hash IS NULL) = 1
+     AND (SELECT COUNT(*) FROM user_role ur JOIN role r ON r.role_id = ur.role_id WHERE ur.user_id = @d_n1 AND r.role_name = 'player') = 1
+     AND (SELECT COUNT(*) FROM user_role WHERE user_id = @d_n1) = 1, 'PASS', 'FAIL'), NULL;
+
+-- username collision, and never linking to an existing email account
+CALL sp_discord_login('200000000000000002', 'aarav_plays', '  ', 'Mars/Phobos', @d_n2);
+INSERT INTO tmp_test_results SELECT 'DISCORD: hint aarav_plays becomes aarav_plays_2, blank display falls back to the username, bad timezone becomes UTC',
+  IF(@d_n2 <> 1 AND (SELECT username FROM users WHERE user_id = @d_n2) = 'aarav_plays_2'
+     AND (SELECT display_name FROM users WHERE user_id = @d_n2) = 'aarav_plays_2'
+     AND (SELECT timezone FROM users WHERE user_id = @d_n2) = 'UTC', 'PASS', 'FAIL'), NULL;
+CALL sp_discord_login('200000000000000003', 'aarav_plays', 'Aarav again', NULL, @d_n3);
+INSERT INTO tmp_test_results SELECT 'DISCORD: a third hint aarav_plays becomes aarav_plays_3',
+  IF((SELECT username FROM users WHERE user_id = @d_n3) = 'aarav_plays_3', 'PASS', 'FAIL'), NULL;
+CALL sp_discord_login('200000000000000004', @d_local1, 'Email twin', 'UTC', @d_n4);
+INSERT INTO tmp_test_results SELECT 'DISCORD: never links to the existing email account (email-only account, hint equal to its email local part)',
+  IF(@d_local1 IS NOT NULL AND @d_n4 <> 2 AND @d_n2 <> 2 AND @d_n3 <> 2
+     AND NOT EXISTS (SELECT 1 FROM auth_account WHERE user_id = 2 AND provider = 'discord')
+     AND (SELECT COUNT(*) FROM auth_account WHERE user_id = 2) = 1, 'PASS', 'FAIL'), NULL;
+
+-- hint sanitising
+CALL sp_discord_login('200000000000000005', '  Cool   GUY!! ', 'Cool Guy', 'UTC', @d_s1);
+CALL sp_discord_login('200000000000000006', 'ab', 'Tiny', 'UTC', @d_s2);
+CALL sp_discord_login('200000000000000007', REPEAT('x', 60), 'Long', 'UTC', @d_s3);
+CALL sp_discord_login('200000000000000008', CONCAT(_utf8mb4 0xE697A5E69CACE8AA9E, ' ', _utf8mb4 0xF09F9880), 'Unicode', 'UTC', @d_s4);
+CALL sp_discord_login('200000000000000009', NULL, REPEAT('d', 64), 'UTC', @d_s5);
+CALL sp_discord_login('200000000000000010', 'x', 'Short', 'UTC', @d_s6);
+INSERT INTO tmp_test_results SELECT 'DISCORD: hints are lower-cased, odd characters become one underscore, short hints are padded, long ones cut to 24',
+  IF((SELECT username FROM users WHERE user_id = @d_s1) = 'cool_guy'
+     AND (SELECT username FROM users WHERE user_id = @d_s2) = 'abplayer'
+     AND (SELECT username FROM users WHERE user_id = @d_s3) = REPEAT('x', 24)
+     AND (SELECT username FROM users WHERE user_id = @d_s4) = 'player'
+     AND (SELECT username FROM users WHERE user_id = @d_s5) = 'player_2'
+     AND (SELECT username FROM users WHERE user_id = @d_s6) = 'xplayer', 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'DISCORD: every generated username matches the username rule; display names are at most 64 characters',
+  IF((SELECT COUNT(*) FROM users WHERE user_id > @d_u0 AND username NOT REGEXP '^[A-Za-z0-9_]{3,32}$') = 0
+     AND (SELECT CHAR_LENGTH(display_name) FROM users WHERE user_id = @d_s5) = 64, 'PASS', 'FAIL'), NULL;
+
+-- banned refused, suspended allowed
+UPDATE users SET status = 'banned' WHERE user_id = @d_s1;
+CALL t_expect_msg('DISCORD: a banned account cannot sign in', "CALL sp_discord_login('200000000000000005', 'Cool Guy', 'Cool Guy', 'UTC', @d_x)", 'This account cannot sign in.');
+UPDATE users SET status = 'suspended' WHERE user_id = @d_s1;
+CALL sp_discord_login('200000000000000005', 'Cool Guy', 'Cool Guy', 'UTC', @d_s1b);
+INSERT INTO tmp_test_results SELECT 'DISCORD: a suspended account may sign in (read-only in the app)', IF(@d_s1b = @d_s1, 'PASS', 'FAIL'), NULL;
+
+-- bad snowflakes
+CALL t_expect_msg('DISCORD: snowflake with letters refused',  "CALL sp_discord_login('12345678901234567a', 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+CALL t_expect_msg('DISCORD: 16-digit snowflake refused',      "CALL sp_discord_login('1234567890123456', 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+CALL t_expect_msg('DISCORD: 21-digit snowflake refused',      "CALL sp_discord_login('123456789012345678901', 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+CALL t_expect_msg('DISCORD: empty snowflake refused',         "CALL sp_discord_login('', 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+CALL t_expect_msg('DISCORD: NULL snowflake refused',          "CALL sp_discord_login(NULL, 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+CALL t_expect_msg('DISCORD: snowflake with spaces or SQL characters refused', "CALL sp_discord_login('1234567890123456 7''--', 'x', 'x', 'UTC', @d_x)", 'That Discord account could not be used.');
+
+-- audit row from trg_auth_account_ai holds no secret
+INSERT INTO tmp_test_results SELECT 'DISCORD: trigger audit row exists for the new discord login and holds no secret',
+  IF((SELECT COUNT(*) FROM audit_log a JOIN auth_account x ON a.entity_id = CAST(x.auth_id AS CHAR)
+        WHERE a.log_id > @d_a0 AND a.entity = 'auth_account' AND a.action = 'login_method_added'
+          AND x.user_id = @d_n1 AND x.provider = 'discord'
+          AND JSON_UNQUOTE(JSON_EXTRACT(a.new_value, '$.provider')) = 'discord' AND JSON_LENGTH(a.new_value) = 2
+          AND CAST(a.new_value AS CHAR) NOT LIKE '%hash%' AND CAST(a.new_value AS CHAR) NOT LIKE '%argon%'
+          AND CAST(a.new_value AS CHAR) NOT LIKE '%200000000000000001%') = 1, 'PASS', 'FAIL'), NULL;
+
+START TRANSACTION;
+CALL t_probe('RBAC: pairadice_auth can EXECUTE sp_discord_login; pairadice_web_ro and pairadice_player cannot',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_auth') AND EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_web_ro') AND EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_player') AND EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_auth' AND Routine_name = 'sp_discord_login' AND FIND_IN_SET('Execute', Proc_priv) > 0) AND NOT EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User IN ('pairadice_web_ro', 'pairadice_player') AND Routine_name = 'sp_discord_login')");
+ROLLBACK;
+
+-- restore everything the Discord tests created
+DELETE FROM user_role    WHERE user_id > @d_u0;
+DELETE FROM auth_account WHERE auth_id > @d_ar0;
+DELETE FROM users        WHERE user_id > @d_u0;
+DELETE FROM embedding_outbox WHERE entity = 'player' AND entity_id > @d_u0;
+DELETE FROM audit_log    WHERE log_id > @d_a0;
+INSERT INTO tmp_test_results SELECT 'CLEANUP: Discord test users, logins, roles, audit and outbox rows are removed',
+  IF((SELECT COUNT(*) FROM users) = @d_users0 AND (SELECT COUNT(*) FROM auth_account) = @d_auth0
+     AND (SELECT COUNT(*) FROM user_role) = @d_ur0 AND (SELECT COUNT(*) FROM audit_log WHERE log_id > @d_a0) = 0
+     AND (SELECT COUNT(*) FROM embedding_outbox WHERE entity = 'player' AND entity_id > @d_u0) = 0, 'PASS', 'FAIL'), NULL;
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
 DROP PROCEDURE t_probe;

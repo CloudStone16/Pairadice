@@ -123,6 +123,14 @@ const checks: Check[] = [
     deniedErrnos: [1142],
   },
   {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "CALL sp_discord_login",
+    sql: "CALL sp_discord_login('0', NULL, NULL, NULL, @pd_probe)",
+    deniedErrnos: [1370],
+  },
+  {
     login: "admin",
     userVar: "PD_DB_USER_ADMIN",
     pwdVar: "PD_DB_PWD_ADMIN",
@@ -147,6 +155,10 @@ const mayExecute: Record<string, { label: string; sql: string; okErrnos: number[
   player: [
     { label: "CALL sp_report_user (runs, refused by the rules)", sql: "CALL sp_report_user(0, 0, 'spam', NULL, NULL, NULL, @pd_probe)", okErrnos: [1644] },
     { label: "CALL sp_chat_history (runs, refused by the rules)", sql: "CALL sp_chat_history(0, 0, NULL, 1)", okErrnos: [1644] },
+  ],
+  auth: [
+    // an invalid snowflake is refused before anything is written
+    { label: "CALL sp_discord_login (runs, refused by the rules)", sql: "CALL sp_discord_login('0', NULL, NULL, NULL, @pd_probe)", okErrnos: [1644] },
   ],
   moderator: [{ label: "CALL sp_claim_report (runs, refused by the rules)", sql: "CALL sp_claim_report(0, 0)", okErrnos: [1644] }],
 };
