@@ -9,7 +9,8 @@ import {
 } from "@/app/(hearth)/camp/[sessionId]/actions";
 import { FormAlert } from "@/components/auth/FormAlert";
 import { ActionControl } from "@/components/camp/ActionControl";
-import { Button, Sprite } from "@/components/ui";
+import { useCampRegion, withCampResult } from "@/components/camp/CampStatus";
+import { PendingButton, Sprite } from "@/components/ui";
 import type { SessionStatus } from "@/lib/types";
 import type { ViewerRole } from "./CampBanner";
 
@@ -21,6 +22,8 @@ export interface JoinAccountOption {
   id: number;
   label: string;
 }
+
+const requestJoin = withCampResult(requestJoinAction);
 
 const selectClasses =
   "min-h-11 w-full rounded-chip border-2 border-ink bg-[#fbf5e6] px-3 py-2 text-base text-ink shadow-[inset_0_2px_0_rgb(18_14_31/0.12)]";
@@ -36,8 +39,9 @@ function KnockForm({
   accounts: JoinAccountOption[];
   auto: boolean;
 }) {
-  const [state, formAction, pending] = useActionState<CampActionState, FormData>(requestJoinAction, null);
+  const [state, formAction, pending] = useActionState<CampActionState, FormData>(requestJoin, null);
   const uid = useId();
+  const hasRegion = useCampRegion();
   return (
     <form action={formAction} className="flex max-w-xl flex-col gap-3">
       <input type="hidden" name="sessionId" value={sessionId} />
@@ -73,18 +77,20 @@ function KnockForm({
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Button type="submit" variant="yellow" disabled={pending}>
+        <PendingButton type="submit" variant="yellow" pending={pending} pendingLabel="Knocking">
           <Sprite name="icon-knock" />
-          {pending ? "Knocking…" : "Knock to join"}
-        </Button>
+          Knock to join
+        </PendingButton>
         <p className="text-sm text-wood-dark">
           {auto ? "This camp lets everyone in straight away." : "The host decides whether to let you in."}
         </p>
       </div>
       <FormAlert message={state && !state.ok ? state.message : undefined} />
-      <p role="status" className={`text-sm text-wood-dark ${state?.ok ? "" : "sr-only"}`}>
-        {state?.ok ? state.message : ""}
-      </p>
+      {hasRegion ? null : (
+        <p role="status" className={`text-sm text-wood-dark ${state?.ok ? "" : "sr-only"}`}>
+          {state?.ok ? state.message : ""}
+        </p>
+      )}
     </form>
   );
 }

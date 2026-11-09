@@ -40,18 +40,21 @@ export function NavTabs({ showGuildHall = false, showVectorLab = false }: { show
   const pathname = usePathname();
   const tabs = [...TABS, ...(showGuildHall ? [GUILD_TAB] : []), ...(showVectorLab ? [LAB_TAB] : [])];
   return (
-    <nav aria-label="Main menu" className="py-1">
-      <ul role="list" className="flex flex-nowrap items-stretch justify-between gap-1 lg:justify-start lg:gap-1.5">
+    <nav aria-label="Main menu" className="min-w-0 max-w-full py-1">
+      <ul
+        role="list"
+        className="flex snap-x snap-mandatory scroll-px-1 flex-nowrap items-stretch justify-between gap-1 overflow-x-auto overscroll-x-contain p-1 lg:snap-none lg:justify-start lg:gap-1.5 lg:overflow-visible lg:p-0"
+      >
         {tabs.map((tab) => {
           const active = tab.exact ? pathname === tab.href : isUnder(pathname, tab.href);
           const inSection = !active && tab.within !== undefined && isUnder(pathname, tab.within);
           const current = active ? "page" : inSection ? "location" : undefined;
           return (
-            <li key={tab.href} className="min-w-0 flex-1 lg:flex-none">
+            <li key={tab.href} className="min-w-[4.5rem] flex-1 snap-start lg:min-w-0 lg:flex-none">
               <Link
                 href={tab.href}
                 aria-current={current}
-                className={`flex h-full flex-col items-center gap-0.5 rounded-pill px-1 py-1 font-display font-semibold transition duration-150 lg:flex-row lg:gap-2 lg:px-2.5 lg:py-1 xl:px-3 lg:text-base ${
+                className={`flex h-full min-h-11 flex-col items-center justify-center gap-0.5 rounded-pill px-1 py-1 font-display font-semibold transition duration-150 lg:flex-row lg:gap-2 lg:px-2.5 lg:py-1 xl:px-3 lg:text-base ${
                   active
                     ? "bg-plum-2 text-cream shadow-[inset_0_-3px_0_var(--color-ember)] ring-2 ring-ember forced-colors:outline-2 forced-colors:outline-[Highlight] forced-colors:underline forced-colors:decoration-4 forced-colors:underline-offset-4"
                     : inSection
@@ -60,7 +63,7 @@ export function NavTabs({ showGuildHall = false, showVectorLab = false }: { show
                 }`}
               >
                 <Sprite name={tab.icon} scale={2} className={active ? "motion-safe:animate-pop" : ""} />
-                <span className="text-[11px] leading-tight lg:hidden">{tab.short}</span>
+                <span className="text-[13px] leading-tight lg:hidden">{tab.short}</span>
                 <span className="hidden lg:inline">{tab.label}</span>
               </Link>
             </li>

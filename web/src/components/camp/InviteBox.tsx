@@ -13,9 +13,8 @@ export function InviteBox({ url }: { url: string }) {
       await navigator.clipboard.writeText(url);
       setNote("Copied");
     } catch {
-      // clipboard blocked: select the text so Ctrl+C works
+      // clipboard blocked: focus the field (its onFocus selects the text) so Ctrl+C works
       field.current?.focus();
-      field.current?.select();
       setNote("Press Ctrl+C to copy the selected link");
     }
   }

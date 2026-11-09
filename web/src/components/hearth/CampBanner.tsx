@@ -1,5 +1,6 @@
 import { Avatar, Chip, Sprite, Window } from "@/components/ui";
 import type { ReactNode } from "react";
+import { CampStatusRegion } from "@/components/camp/CampStatus";
 import { cartSprite, formatWhen } from "@/lib/format";
 import type { Camp } from "@/lib/types";
 import { StatusChip } from "./StatusChip";
@@ -76,6 +77,7 @@ export function CampBanner({
           <div className="mt-4 empty:hidden">
             <CampAction camp={camp} role={role} actions={actions} />
           </div>
+          <CampStatusRegion />
         </div>
       </div>
     </Window>

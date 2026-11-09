@@ -77,7 +77,7 @@ export function Group({
   className?: string;
 }) {
   return (
-    <fieldset id={id} className={`min-w-0 ${className}`} aria-describedby={ariaFor(id, { hint, error })["aria-describedby"]}>
+    <fieldset id={id} tabIndex={-1} className={`min-w-0 ${className}`} aria-describedby={ariaFor(id, { hint, error })["aria-describedby"]}>
       <legend className="mb-1 font-display text-base font-semibold text-ink">{legend}</legend>
       {children}
       {hint ? <FieldHint id={id}>{hint}</FieldHint> : null}

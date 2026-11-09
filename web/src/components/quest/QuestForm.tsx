@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { hostQuest } from "@/app/(hearth)/camp/new/actions";
-import { Button, Sprite } from "@/components/ui";
+import { FormAlert } from "@/components/auth/FormAlert";
+import { PendingButton, Sprite } from "@/components/ui";
 import { languageName } from "@/lib/format";
 import { CheckRow, Field, Group, ariaFor, controlClasses } from "./Field";
 import {
@@ -93,11 +94,6 @@ export function QuestForm({
   const seats = Number(maxPlayers) || 0;
   const defaultLangs = state.status === "idle" ? ["en"] : list("languages");
 
-  const summaryRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (state.status === "error") summaryRef.current?.focus();
-  }, [state]);
-
   const errorEntries = Object.entries(fe) as Array<[QuestField, string]>;
 
   function onGame(id: string) {
@@ -132,27 +128,11 @@ export function QuestForm({
         </ol>
       </nav>
 
-      <div ref={summaryRef} role="alert" tabIndex={-1} className={state.status === "error" ? "" : "hidden"}>
-        {state.status === "error" ? (
-          <div className="rounded-frame border-2 border-[#8a2621] bg-[#fff1ec] p-3 text-[15px] text-[#6e1c18]">
-            <p className="flex items-start gap-2 font-semibold">
-              <Sprite name="icon-warning" className="mt-0.5" />
-              <span>{state.message ?? "Something went wrong, please try again."}</span>
-            </p>
-            {errorEntries.length > 0 ? (
-              <ul role="list" className="mt-2 list-disc pl-10">
-                {errorEntries.map(([f, msg]) => (
-                  <li key={f}>
-                    <a href={`#${FIELD_ANCHOR[f]}`} className="underline underline-offset-2">
-                      {msg}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      <FormAlert
+        message={state.status === "error" ? (state.message ?? "Something went wrong, please try again.") : undefined}
+        items={errorEntries.map(([f, msg]) => ({ id: FIELD_ANCHOR[f], text: msg }))}
+        focusKey={state}
+      />
 
       {/* 1. Game */}
       <fieldset id="step-game" className="flex min-w-0 flex-col gap-4 scroll-mt-24">
@@ -347,10 +327,10 @@ export function QuestForm({
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="green" disabled={pending} aria-disabled={pending}>
+        <PendingButton type="submit" variant="green" pending={pending} pendingLabel="Pinning your quest">
           <Sprite name="icon-new-quest" />
           {pending ? "Pinning your quest..." : "Post the quest"}
-        </Button>
+        </PendingButton>
         <span className="text-[15px] text-wood-dark">The board updates the moment it is posted.</span>
       </div>
     </form>

@@ -1,7 +1,8 @@
 import { Avatar } from "@/components/ui";
 import { getViewer } from "@/lib/auth/viewer";
-import { query } from "@/lib/db";
-import { notBlockedWith } from "@/lib/sql-parts";
+import { queryAs } from "@/lib/db";
+import { filterVisiblePlayers } from "@/lib/queries-social";
+import { readCtx } from "@/lib/read-login";
 import { similarPlayers } from "@/lib/vector/search";
 import { UserLink } from "./UserLink";
 
@@ -21,16 +22,14 @@ async function loadKindred(userId: number): Promise<Kindred[]> {
   const ids = hits.map((h) => Number(h._id));
   if (ids.length === 0) return [];
   // Drop anyone blocked in either direction (the vector store applies no safety filters) and anyone not active.
-  const users = await query<{ user_id: number; username: string; display_name: string }>(
-    `SELECT u.user_id, u.username, u.display_name
-       FROM users u
-      WHERE u.user_id IN (?) AND u.status = 'active' AND ${notBlockedWith("u")}`,
-    [ids, userId, userId],
-  );
+  // Runs as the viewer's own DB login: the anonymous web login cannot read user_block.
+  const users = await filterVisiblePlayers(userId, ids);
   const byId = new Map(users.map((u) => [Number(u.user_id), u]));
   const kept = ids.filter((id) => byId.has(id)).slice(0, SHOW);
   if (kept.length === 0) return [];
-  const shared = await query<{ user_id: number; name: string }>(
+  const { login } = await readCtx(userId);
+  const shared = await queryAs<{ user_id: number; name: string }>(
+    login,
     `SELECT DISTINCT p.user_id, g.name
        FROM player_game_profile p
        JOIN game g ON g.game_id = p.game_id

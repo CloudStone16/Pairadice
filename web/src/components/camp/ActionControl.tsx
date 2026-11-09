@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { CampActionState } from "@/app/(hearth)/camp/[sessionId]/actions";
 import { FormAlert } from "@/components/auth/FormAlert";
-import { Button, Sprite, type ButtonVariant } from "@/components/ui";
+import { Button, PendingButton, Sprite, type ButtonVariant } from "@/components/ui";
 import type { SpriteName } from "@/lib/sprite-names";
+import { useCampRegion, withCampResult } from "./CampStatus";
 
 export interface ActionControlProps {
   action: (prev: CampActionState, fd: FormData) => Promise<CampActionState>;
@@ -23,8 +24,9 @@ export interface ActionControlProps {
 }
 
 /**
- * One server action as a button. Pending state disables the button; a failure shows the database's
- * message in an alert region; a success is announced politely.
+ * One server action as a button. While pending it is aria-disabled (it keeps focus) and the pending
+ * label is announced; a failure shows the database's message in an alert region beside the control; a
+ * success goes to the CampStatusRegion that stays mounted when this control disappears.
  */
 export function ActionControl({
   action,
@@ -37,12 +39,14 @@ export function ActionControl({
   confirm,
   surface = "dark",
 }: ActionControlProps) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const wrapped = useMemo(() => withCampResult(action), [action]);
+  const [state, formAction, pending] = useActionState(wrapped, null);
   // the confirm step is open from the click until the action reports back (the state object changes)
   const [askedAt, setAskedAt] = useState<{ at: CampActionState } | null>(null);
   const asking = askedAt !== null && askedAt.at === state;
   const setAsking = (open: boolean) => setAskedAt(open ? { at: state } : null);
   const box = useRef<HTMLDivElement>(null);
+  const hasRegion = useCampRegion();
   const wasAsking = useRef(false);
 
   // focus the safe choice when the confirm step opens, and return focus when it is dismissed
@@ -71,10 +75,26 @@ export function ActionControl({
           {hidden}
           <p className="text-sm font-semibold">{confirm.prompt}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="red" size="sm" disabled={pending} aria-label={`${confirm.yes}: ${name}`}>
-              {pending ? "Working…" : confirm.yes}
-            </Button>
-            <Button data-no="" type="button" variant="ghost" size="sm" onClick={() => setAsking(false)} disabled={pending}>
+            <PendingButton
+              type="submit"
+              variant="red"
+              size="sm"
+              pending={pending}
+              pendingLabel={`Working on ${name}`}
+              aria-label={`${confirm.yes}: ${name}`}
+            >
+              {confirm.yes}
+            </PendingButton>
+            <Button
+              data-no=""
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-disabled={pending ? true : undefined}
+              onClick={() => {
+                if (!pending) setAsking(false);
+              }}
+            >
               {confirm.no ?? "Never mind"}
             </Button>
           </div>
@@ -82,24 +102,27 @@ export function ActionControl({
       ) : (
         <form action={confirm ? undefined : formAction} onSubmit={confirm ? (e) => e.preventDefault() : undefined}>
           {hidden}
-          <Button
+          <PendingButton
             data-trigger=""
             type={confirm ? "button" : "submit"}
             variant={variant}
             size={size}
-            disabled={pending}
+            pending={pending}
+            pendingLabel={`Working on ${name}`}
             aria-label={name === label ? undefined : name}
             onClick={confirm ? () => setAsking(true) : undefined}
           >
             {icon ? <Sprite name={icon} /> : null}
-            {pending ? "Working…" : label}
-          </Button>
+            {label}
+          </PendingButton>
         </form>
       )}
       <FormAlert message={state && !state.ok ? state.message : undefined} />
-      <p role="status" className={`text-sm ${msgTone} ${state?.ok ? "" : "sr-only"}`}>
-        {state?.ok ? state.message : ""}
-      </p>
+      {hasRegion ? null : (
+        <p role="status" className={`text-sm ${msgTone} ${state?.ok ? "" : "sr-only"}`}>
+          {state?.ok ? state.message : ""}
+        </p>
+      )}
     </div>
   );
 }

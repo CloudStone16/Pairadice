@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Sprite, Window } from "@/components/ui";
+import { Button, PendingButton, Sprite, Window } from "@/components/ui";
 import {
   banPlayerAction,
   createDemoPlayerAction,
@@ -33,6 +33,8 @@ interface Watch {
   state: "waiting" | "done" | "timeout";
   latest: Snapshot | null;
   elapsed: number;
+  /** Consecutive snapshot requests that failed (network or non-2xx). */
+  failures: number;
 }
 
 const KIND_LABEL: Record<WatchKind, string> = {
@@ -50,14 +52,29 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
   const [watch, setWatch] = useState<Watch | null>(null);
   const [confirmBan, setConfirmBan] = useState(false);
   // what the poller needs, set from event handlers (never during render)
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const banBox = useRef<HTMLDivElement>(null);
+  // where focus goes when the confirm step closes: back to the trigger (cancel) or to the status (done)
+  const afterConfirm = useRef<"trigger" | "status">("trigger");
+  const wasConfirming = useRef(false);
   const cfgRef = useRef<Pick<Watch, "kind" | "userId" | "before" | "startedAt"> | null>(null);
 
   // ---- polling: every 2 s until the document reaches the expected state, or 60 s pass
+  useEffect(() => {
+    if (confirmBan) banBox.current?.querySelector<HTMLElement>("[data-no]")?.focus();
+    else if (wasConfirming.current && afterConfirm.current === "trigger") {
+      banBox.current?.querySelector<HTMLElement>("[data-trigger]")?.focus();
+    }
+    wasConfirming.current = confirmBan;
+  }, [confirmBan]);
+
   const waiting = watch?.state === "waiting";
   const startedAt = watch?.startedAt;
   useEffect(() => {
     if (!waiting || startedAt === undefined) return;
     let stopped = false;
+    let failures = 0;
+    const controller = new AbortController();
     const patch = (p: Partial<Watch>) => setWatch((w) => (w && w.startedAt === startedAt ? { ...w, ...p } : w));
     const tick = async () => {
       const cur = cfgRef.current;
@@ -65,29 +82,37 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
       const elapsed = Date.now() - cur.startedAt;
       let snap: Snapshot | null = null;
       try {
-        const res = await fetch(`/api/admin/vector/snapshot?user=${cur.userId}`, { cache: "no-store" });
+        const res = await fetch(`/api/admin/vector/snapshot?user=${cur.userId}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (res.ok) snap = (await res.json()) as Snapshot;
       } catch {
         snap = null;
       }
       if (stopped) return;
+      const before = failures;
+      failures = snap ? 0 : failures + 1;
+      if (failures === 1 && before === 0) setAnnounce("Snapshot unavailable. Still trying every 2 seconds.");
+      else if (failures === 0 && before > 0) setAnnounce("Snapshot is available again.");
       if (snap && isDone(cur.kind, cur.before, snap)) {
         stopped = true;
-        patch({ state: "done", latest: snap, elapsed });
+        patch({ state: "done", latest: snap, elapsed, failures: 0 });
         setAnnounce(`MongoDB caught up after ${(elapsed / 1000).toFixed(1)} seconds.`);
         router.refresh();
       } else if (elapsed >= GIVE_UP_MS) {
         stopped = true;
-        patch({ state: "timeout", ...(snap ? { latest: snap } : {}), elapsed });
+        patch({ state: "timeout", ...(snap ? { latest: snap } : {}), elapsed, failures });
         setAnnounce("Gave up after 60 seconds. The worker may not be running.");
       } else {
-        patch({ ...(snap ? { latest: snap } : {}), elapsed });
+        patch({ ...(snap ? { latest: snap } : {}), elapsed, failures });
       }
     };
     void tick();
     const timer = setInterval(() => void tick(), POLL_MS);
     return () => {
       stopped = true;
+      controller.abort();
       clearInterval(timer);
     };
   }, [waiting, startedAt, router]);
@@ -100,7 +125,10 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
         return;
       }
       setError(null);
+      afterConfirm.current = "status";
       setConfirmBan(false);
+      // the confirm step is about to unmount: hand focus to the status region, which stays mounted
+      if (kind === "ban") statusRef.current?.focus();
       const startedAt = Date.now();
       cfgRef.current = { kind, userId: res.userId, before: res.before, startedAt };
       setWatch({
@@ -114,6 +142,7 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
         state: "waiting",
         latest: null,
         elapsed: 0,
+        failures: 0,
       });
       setAnnounce(`${res.note} Waiting for the worker.`);
       if (kind === "create") router.replace(`/admin/vector?player=${res.userId}`);
@@ -122,6 +151,11 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
     [router],
   );
 
+  const cancelConfirm = () => {
+    afterConfirm.current = "trigger";
+    setConfirmBan(false);
+  };
+
   const run = (kind: WatchKind, username: string, fn: () => Promise<LabResult>) =>
     startTransition(async () => {
       begin(kind, username, await fn());
@@ -129,7 +163,13 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
 
   return (
     <div className="flex flex-col gap-8">
-      <p role="status" aria-live="polite" className="sr-only">
+      <p
+        ref={statusRef}
+        role="status"
+        aria-live="polite"
+        tabIndex={-1}
+        className="sr-only focus:not-sr-only focus:rounded-chip focus:bg-ink/60 focus:px-3 focus:py-2"
+      >
         {announce}
       </p>
 
@@ -139,7 +179,7 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
         </p>
       ) : null}
 
-      <div className="grid gap-8 xl:grid-cols-2">
+      <div ref={banBox} className="grid gap-8 xl:grid-cols-2">
         <Window title="U  Update bio and tags" variant="parchment" className="xl:col-span-2">
           {player && player.status !== "banned" ? (
             <EditForm
@@ -164,38 +204,55 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
           {!player ? (
             <p>Pick a player above first.</p>
           ) : player.status === "banned" ? (
-            <Button
+            <PendingButton
               variant="green"
-              disabled={pending}
+              pending={pending}
+              pendingLabel="Restoring"
               onClick={() => run("restore", `@${player.username}`, () => restorePlayerAction(player.userId))}
             >
               <Sprite name="icon-accept" /> Restore @{player.username}
-            </Button>
+            </PendingButton>
           ) : player.protectedReason ? (
             <p className="font-semibold">
               <Sprite name="icon-lock" className="mr-1 inline-block align-middle" /> {player.protectedReason}
             </p>
           ) : confirmBan ? (
-            <div role="group" aria-label="Confirm ban" className="flex flex-col gap-3">
+            <div
+              role="group"
+              aria-label="Confirm ban"
+              className="flex flex-col gap-3"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") cancelConfirm();
+              }}
+            >
               <p className="font-semibold">Really ban @{player.username}? Their document will be deleted from MongoDB.</p>
               <div className="flex flex-wrap gap-3">
-                <Button
+                <PendingButton
                   variant="red"
-                  disabled={pending}
-                  autoFocus
+                  pending={pending}
+                  pendingLabel="Banning"
                   onClick={() => run("ban", `@${player.username}`, () => banPlayerAction(player.userId))}
                 >
                   <Sprite name="icon-decline" /> Yes, ban
-                </Button>
-                <Button variant="ghost" onClick={() => setConfirmBan(false)}>
+                </PendingButton>
+                <Button data-no="" variant="ghost" aria-disabled={pending ? true : undefined} onClick={() => !pending && cancelConfirm()}>
                   Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <Button variant="red" disabled={pending} onClick={() => setConfirmBan(true)}>
+            <PendingButton
+              data-trigger=""
+              variant="red"
+              pending={pending}
+              pendingLabel="Working"
+              onClick={() => {
+                afterConfirm.current = "trigger";
+                setConfirmBan(true);
+              }}
+            >
               <Sprite name="icon-decline" /> Ban @{player.username}
-            </Button>
+            </PendingButton>
           )}
         </Window>
 
@@ -204,9 +261,14 @@ export function LabActions({ player, tags }: { player: LabPlayerView | null; tag
             Registers <code>lab_xxxx</code> through <code>sp_register_user</code> (random password, never shown), sets a
             bio and two tags, then waits for the new document.
           </p>
-          <Button variant="green" disabled={pending} onClick={() => run("create", "the new demo player", () => createDemoPlayerAction())}>
+          <PendingButton
+            variant="green"
+            pending={pending}
+            pendingLabel="Creating a demo player"
+            onClick={() => run("create", "the new demo player", () => createDemoPlayerAction())}
+          >
             <Sprite name="icon-sparkle" /> Create a demo player
-          </Button>
+          </PendingButton>
         </Window>
       </div>
 
@@ -278,9 +340,9 @@ function EditForm({
         </div>
       </fieldset>
       <div>
-        <Button type="submit" variant="yellow" disabled={busy}>
+        <PendingButton type="submit" variant="yellow" pending={busy} pendingLabel="Saving">
           <Sprite name="icon-scroll" /> Save to MySQL
-        </Button>
+        </PendingButton>
       </div>
     </form>
   );
@@ -338,6 +400,9 @@ function WatchPanel({ watch }: { watch: Watch }) {
             <p>
               <Sprite name="icon-hourglass" className="mr-1 inline-block align-middle motion-safe:animate-pulse" />
               Polling every 2 s, {secs} s so far (gives up at 60 s).
+              {watch.failures > 0 ? (
+                <strong className="ml-1">Snapshot unavailable ({watch.failures} failed in a row), still trying.</strong>
+              ) : null}
             </p>
           ) : watch.state === "done" ? (
             <p className="font-semibold">

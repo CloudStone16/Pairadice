@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import {
   acceptAction,
   blockAction,
@@ -11,7 +11,7 @@ import {
   unblockAction,
   type SocialActionState,
 } from "@/app/(hearth)/friends/actions";
-import { Button, Sprite, type ButtonVariant } from "@/components/ui";
+import { Button, PendingButton, Sprite, type ButtonVariant } from "@/components/ui";
 import type { SpriteName } from "@/lib/sprite-names";
 import { useSocialReport } from "./SocialStatus";
 
@@ -65,11 +65,16 @@ export function SocialAction({
 }) {
   const def = KINDS[kind];
   const report = useSocialReport();
-  const wrapped = async (prev: SocialActionState, fd: FormData): Promise<SocialActionState> => {
-    const r = await def.action(prev, fd);
-    if (r) report({ ok: r.ok, message: r.ok ? `${name}: ${r.message}` : r.message });
-    return r;
-  };
+  // stable identity: only changes when the action, the reporter or the player's name does
+  const wrapped = useMemo(
+    () =>
+      async (prev: SocialActionState, fd: FormData): Promise<SocialActionState> => {
+        const r = await def.action(prev, fd);
+        if (r) report({ ok: r.ok, message: r.ok ? `${name}: ${r.message}` : r.message });
+        return r;
+      },
+    [def, report, name],
+  );
   const [state, formAction, pending] = useActionState(wrapped, null);
   const [askedAt, setAskedAt] = useState<{ at: SocialActionState } | null>(null);
   const asking = askedAt !== null && askedAt.at === state;
@@ -87,7 +92,7 @@ export function SocialAction({
   const hidden = <input type="hidden" name="userId" value={userId} />;
 
   return (
-    <div ref={box} className="flex flex-col gap-2">
+    <div ref={box} aria-busy={pending ? true : undefined} className="flex flex-col gap-2">
       {confirm && asking ? (
         <form
           action={formAction}
@@ -101,10 +106,26 @@ export function SocialAction({
           {hidden}
           <p className="text-sm font-semibold">{confirm.prompt}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="red" size="sm" disabled={pending} aria-label={`${confirm.yes}: ${name}`}>
-              {pending ? "Working…" : confirm.yes}
-            </Button>
-            <Button data-no="" type="button" variant="ghost" size="sm" onClick={() => setAskedAt(null)} disabled={pending}>
+            <PendingButton
+              type="submit"
+              variant="red"
+              size="sm"
+              pending={pending}
+              pendingLabel={`Working on ${name}`}
+              aria-label={`${confirm.yes}: ${name}`}
+            >
+              {confirm.yes}
+            </PendingButton>
+            <Button
+              data-no=""
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-disabled={pending ? true : undefined}
+              onClick={() => {
+                if (!pending) setAskedAt(null);
+              }}
+            >
               Never mind
             </Button>
           </div>
@@ -112,18 +133,19 @@ export function SocialAction({
       ) : (
         <form action={confirm ? undefined : formAction} onSubmit={confirm ? (e) => e.preventDefault() : undefined}>
           {hidden}
-          <Button
+          <PendingButton
             data-trigger=""
             type={confirm ? "button" : "submit"}
             variant={def.variant}
             size={size}
-            disabled={pending}
+            pending={pending}
+            pendingLabel={`Working on ${name}`}
             aria-label={accessible}
             onClick={confirm ? () => setAskedAt({ at: state }) : undefined}
           >
             <Sprite name={def.icon} />
-            {pending ? "Working…" : def.label}
-          </Button>
+            {def.label}
+          </PendingButton>
         </form>
       )}
     </div>

@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { signUp } from "@/app/(auth)/actions";
-import { Button, Sprite } from "@/components/ui";
+import { PendingButton, Sprite } from "@/components/ui";
 import { initialAuthState } from "@/lib/auth/form-state";
-import { FormAlert } from "./FormAlert";
+import { FormAlert, authErrorItems } from "./FormAlert";
 import { PasswordField } from "./PasswordField";
 import { TextField } from "./TextField";
 
 export function SignUpForm() {
   const [state, action, pending] = useActionState(signUp, initialAuthState);
+  const fe = state.fieldErrors;
   const [timezone, setTimezone] = useState("");
   useEffect(() => {
     try {
@@ -20,11 +21,10 @@ export function SignUpForm() {
       setTimezone("");
     }
   }, []);
-  const fe = state.fieldErrors;
   return (
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="timezone" value={timezone} />
-      <FormAlert message={state.message} />
+      <FormAlert message={state.message} items={authErrorItems(fe)} focusKey={state} />
       <TextField
         id="username"
         name="username"
@@ -58,10 +58,10 @@ export function SignUpForm() {
         maxLength={254}
       />
       <PasswordField autoComplete="new-password" hint="At least 10 characters." error={fe?.password} />
-      <Button type="submit" variant="green" disabled={pending} aria-disabled={pending} className="w-full">
+      <PendingButton type="submit" variant="green" pending={pending} pendingLabel="Packing your bags" className="w-full">
         <Sprite name="icon-door" />
         {pending ? "Packing your bags..." : "Create account"}
-      </Button>
+      </PendingButton>
       <p className="text-center text-base text-ink">
         Already have a character?{" "}
         <Link href="/sign-in" className="font-bold underline underline-offset-4 hover:text-wood-dark">

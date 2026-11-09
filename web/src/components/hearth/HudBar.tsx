@@ -58,14 +58,13 @@ export function HudBar({ user, viewer }: { user: UserLite; viewer: HudViewer }) 
               >
                 <Sprite name="icon-door" />
                 <span className="sr-only sm:not-sr-only">Sign out</span>
-                <span className="sr-only sm:hidden">Sign out</span>
               </button>
             </form>
           ) : null}
           </div>
         </div>
 
-        <div className="order-2 w-full lg:order-2 lg:w-auto lg:flex-1">
+        <div className="order-2 w-full min-w-0 lg:order-2 lg:w-auto lg:flex-1">
           <NavTabs showGuildHall={isMod} showVectorLab={isAdmin} />
         </div>
       </div>

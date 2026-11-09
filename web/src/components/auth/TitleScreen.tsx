@@ -5,7 +5,6 @@ import { Sprite } from "@/components/ui";
 export function TitleScreen({ tagline, children }: { tagline: string; children: ReactNode }) {
   return (
     <div className="relative flex flex-1 flex-col overflow-x-clip">
-      <style>{`@keyframes pd-blink{0%,55%{opacity:1}56%,100%{opacity:.15}}@media (prefers-reduced-motion:no-preference){.pd-blink{animation:pd-blink 1.4s steps(1,end) infinite}}`}</style>
       {/* sky decoration, purely visual */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <Sprite name="deco-moon" scale={4} className="absolute right-[8%] top-[6%] opacity-95" />
@@ -25,7 +24,7 @@ export function TitleScreen({ tagline, children }: { tagline: string; children: 
             PairADice
           </p>
           <p className="flex items-center gap-2 font-display text-lg font-semibold text-ember">
-            <span aria-hidden="true" className="pd-blink">
+            <span aria-hidden="true" className="inline-block motion-safe:animate-blink">
               <Sprite name="icon-press-start" scale={2} />
             </span>
             {tagline}

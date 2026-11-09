@@ -12,3 +12,5 @@ export { Tooltip } from "./Tooltip";
 export type { TooltipProps } from "./Tooltip";
 export { Sprite } from "./Sprite";
 export type { SpriteProps } from "./Sprite";
+export { PendingButton } from "./PendingButton";
+export type { PendingButtonProps } from "./PendingButton";
