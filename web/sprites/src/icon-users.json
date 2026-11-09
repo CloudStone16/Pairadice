@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "e": "#f2a65a",
+  "g": "#72c374",
+  "G": "#3f8a45",
+  "l": "#b4a7e8",
+  "L": "#8a7cc8",
+  "y": "#f2c35b",
+  "Y": "#c99a3a"
+ },
+ "rows": [
+  "......kkkk......",
+  ".....keeeek.....",
+  ".....keeeek.....",
+  ".....keeeek.....",
+  ".kkk.keeeek.kkk.",
+  "keeek.kkkk.keeek",
+  "keeekyyyyy.keeek",
+  "keeekyyyyykkeeek",
+  ".kkkkyyyyyk.kkk.",
+  ".gggkYYYYYkllll.",
+  "kgggkkkkkkkllllk",
+  "kGGGGk....kLLLLk",
+  "kkkkkk....kkkkkk",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "three busts side by side, middle in front"
+}

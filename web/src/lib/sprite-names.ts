@@ -98,6 +98,11 @@ export const SPRITE_NAMES = [
   "icon-trash",
   "icon-database",
   "icon-vector",
+  "icon-lift",
+  "icon-claim",
+  "icon-hide-message",
+  "icon-restore",
+  "icon-users",
   "guild-hall-banner-32",
   // Phase 5 (friends)
   "icon-user-add",
