@@ -12,7 +12,16 @@ export function sql() {
       throw new Error('Set MYSQL_PWD or MYSQL_SOCKET (and MYSQL_USER if not root) in the environment; credentials are never stored in files.');
     }
     // dateStrings keeps DATETIME(6) microseconds intact (outbox rows are matched on enqueued_at)
-    pool = mysql.createPool({ ...config.mysql, dateStrings: true, decimalNumbers: true, connectionLimit: 4 });
+    pool = mysql.createPool({
+      ...config.mysql, charset: 'utf8mb4_0900_ai_ci', timezone: 'Z',
+      dateStrings: true, decimalNumbers: true, connectionLimit: 4,
+    });
+    // every DATETIME in the schema is UTC; make the session agree (same as web/src/lib/db.ts)
+    pool.pool.on('connection', (conn) => {
+      conn.query("SET time_zone = '+00:00'", (err) => {
+        if (err) console.error('could not set session time_zone:', err.message);
+      });
+    });
   }
   return pool;
 }
