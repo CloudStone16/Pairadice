@@ -40,7 +40,7 @@ What to load:
       --no-seed         schema + routines only, no sample data
       --no-rbac         skip the MySQL roles (needs CREATE ROLE privilege)
       --no-vector       skip the MongoDB sync triggers (07_vector_outbox.sql)
-      --tests           run the constraint tests afterwards (34 must-fail statements)
+      --tests           run the constraint tests afterwards (66 must-fail statements)
       --samples         print the sample queries afterwards
       --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
       --web-user NAME   also create a READ-ONLY login NAME@localhost with the pairadice_web_ro role
