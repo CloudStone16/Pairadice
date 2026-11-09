@@ -16,7 +16,7 @@ cd Pairadice
 ADMIN=<your MySQL admin login>          # e.g. root, or your auth_socket admin login
 SOCK=/var/run/mysqld/mysqld.sock
 
-./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 319/319 passed
+./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 336/336 passed
 ./vector/setup.sh                                                               # needs Docker running
 ```
 
@@ -108,12 +108,12 @@ the other kinds of constraint:
   session's game.
 
 ```bash
-grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 255, plus 64 behaviour rows = 319
+grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 263, plus 73 behaviour rows = 336
 grep -o "t_expect_error('[^']*'" database/06_constraint_tests.sql | head -12
 ```
 
-> "319 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
-> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 319/319 passed."
+> "336 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
+> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 336/336 passed."
 
 ## 2:30 – 4:00 · DML and queries (4 marks)
 
@@ -173,7 +173,7 @@ lift he is `active` again with a `sanction lift` row that carries the reason.
 > "The moderator has no INSERT on `sanction` and no UPDATE on `report`. Every write goes through a procedure that
 > checks `fn_has_permission`, the staff rank (a moderator cannot sanction staff), conflict of interest and duration
 > limits, then lets the triggers flip the status and write the audit log. A player cannot issue a sanction, and a
-> moderator cannot issue a **ban**; only admins hold `user.ban`. All of that is among the 319 checks."
+> moderator cannot issue a **ban**; only admins hold `user.ban`. All of that is among the 336 checks."
 
 **Transaction with a row lock.** `sp_accept_participant` locks the session row (`SELECT … FOR UPDATE`) before it
 fills a seat, so two accepts at the same moment cannot overbook. You will see it live in the UI step below.
@@ -284,6 +284,13 @@ delete steps and prints each one.
    `GET /api/chat/3?after=ID`). Then open `/messages/8` as Aarav to show a DM thread with Rohan (`sp_send_dm`: allowed
    because they are friends). Optional: on a completed camp, show the "Rate your party" panel (`sp_write_review`).
 
+7. **Discord sign-in (optional, about 20 seconds; only if the feature is switched on).** Sign out and open `/sign-in`:
+   the "Continue with Discord" button is enabled. Click it and stop at Discord's consent screen, which shows only the
+   `identify` scope. Do not type or show any credentials or keys. Say: "State and a PKCE challenge go out, the callback
+   checks them, and `sp_discord_login` finds the account by Discord id only, never by email, so a Discord profile
+   cannot take over an email account. No token is stored." If it is switched off the button is disabled, and that is
+   fine to show. The real end-to-end login was verified live on 2026-11-11.
+
 Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is time.
 
 > "Pages are server components reading MySQL directly with parameterised SQL. Every form is a server action that
@@ -294,7 +301,7 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 
 - Docs: the README (architecture, technology justification, rubric map) and this script. Git history: small,
   focused commits for each piece.
-- Honest gaps: Discord login is not built, the worker still uses the general MySQL login instead of its own `pairadice_vec_worker` login, chat polls every 4
+- Honest gaps: Discord accounts are not linked to existing email accounts, the worker still uses the general MySQL login instead of its own `pairadice_vec_worker` login, chat polls every 4
   seconds instead of using websockets, and unread counts are not built. Two `message` indexes are possible but not
   applied, because existing tables are not to be altered.
 
@@ -310,4 +317,4 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 | "Upcoming" sessions are in the past | Reload: `./database/setup.sh … -y --tests`, then `./vector/setup.sh` |
 | "Knock to join" refused after an earlier rehearsal | Aarav is already in camp 10; reload the database |
 | "You already reported this player" | Aarav has an open report on Jake from a rehearsal; reload the database |
-| Test summary below 319/319 | Reload once and rerun before investigating |
+| Test summary below 336/336 | Reload once and rerun before investigating |

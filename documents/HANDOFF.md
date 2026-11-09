@@ -1,6 +1,6 @@
 # PairADice: handoff for Arjun
 
-Last updated: 2026-11-11. Phase 5 (camp chat, DMs, reviews, badges) and Phase 6 (moderation) are built. MongoDB authentication is done on branch `mongo-auth` (not merged at the time of writing) and was verified live.
+Last updated: 2026-11-11. Phases 5 and 6, MongoDB authentication and Discord sign-in are built, merged to `main` and verified live (Discord: verified live on 2026-11-11 (consent, callback, a new player created, session started, PKCE accepted by Discord)). Phase 7 polish is what remains.
 This file is meant to be the only document you need to finish
 the project. It is tracked in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
 
@@ -23,7 +23,7 @@ Keychain items. Keep it that way if you edit it.
 8. [Phase 6: Moderation (done)](#8-phase-6-moderation-done)
 9. [Phase 5: Camp chat, DMs and reviews (done)](#9-phase-5-camp-chat-dms-and-reviews-done)
 10. [MongoDB authentication (done)](#10-mongodb-authentication-done)
-11. [Discord OAuth sign-in](#11-discord-oauth-sign-in-optional-polish)
+11. [Discord OAuth sign-in (done)](#11-discord-oauth-sign-in-done)
 12. [Phase 7: Polish](#12-phase-7-polish)
 13. [Sprites needed per phase](#13-sprites-needed-per-phase)
 14. [Definition of done](#14-definition-of-done)
@@ -55,30 +55,30 @@ Phases 0 to 4, profile editing, Phase 6 (moderation) and Phase 5 (chat, DMs, rev
 | Phase 6 moderation | `38bcbc7` procedures, `36aaf2b` icons, `439bdcb` web, `cba9043` docs: `12_moderation.sql`, RBAC and routine changes, `/mod`, `/admin/users`, `/report` |
 | Phase 5 chat | branch `phase-5-chat` (uncommitted at the time of writing): `13_chat.sql`, RBAC changes, `check-chat-reads.ts`, chat, DM and review screens, 13 sprites |
 
-Counts, taken from the SQL files on 2026-11-11 (the 319 check total is from a `--tests` run):
+Counts, taken from the SQL files on 2026-11-11 (the 336 check total is from a `--tests` run):
 
 | Object | Count |
 |---|---|
 | Tables | 45 (`01_schema.sql`) |
 | Views | 4 (`v_open_sessions`, `v_player_card`, `v_session_roster`, `v_outbox_dead`) |
 | Functions | 9: `fn_has_permission`, `fn_is_blocked`, `fn_user_active`, `fn_are_friends`, `fn_platform_compatible`, `fn_local_time`, `fn_trust_score`, `fn_staff_rank`, `fn_dm_refusal` |
-| Procedures | 51: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11, 9 in 12, 10 in 13 (the 3 `t_*` test helpers in 06 are not counted) |
+| Procedures | 52: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11, 9 in 12, 10 in 13, 1 in 14 (the 3 `t_*` test helpers in 06 are not counted) |
 | Events | 1: `ev_expire_sanctions` (12), every 5 minutes |
 | Triggers | 55: 23 in 02, 30 in 07 (vector sync), 2 in 09 |
-| DB checks | 319 in `06_constraint_tests.sql` (255 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 64 behaviour rows) |
+| DB checks | 336 in `06_constraint_tests.sql` (263 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 73 behaviour rows) |
 | Chat read checks | 46 in `web/scripts/check-chat-reads.ts` (`bun run check:chat`; needs `MYSQL_PWD` in the environment) |
-| Web unit tests | 134 across 15 files, all passing (`bun test`) |
+| Web unit tests | 149 across 16 files, all passing (`bun test`) |
 | Sprites | 133 JSON sources in `web/sprites/src/` (Phase 5 added `icon-send`, `icon-emoji`, 8 emotes and 3 badge medals) |
 
 What works today: schema, routines and RBAC; MongoDB vector store with outbox sync and hybrid ranking; email sign-in
 with a different MySQL login per role; hosting, joining and managing quests; friends and blocks; profile editing at
 `/character/edit`; the admin Vector Lab at `/admin/vector`; moderation: player reports at `/report/[userId]`, the Guild Hall
 at `/mod` (overview, `/mod/reports`, `/mod/reports/[id]`, `/mod/sanctions`, `/mod/audit`) and admin users and roles at
-`/admin/users` and `/admin/users/[id]`; camp chat with a composer and emotes (polled every 4 seconds), DM inbox and threads at `/messages`, "Rate your party" on completed camps, and badge medals on the character sheet. The player role has no direct DML on any table.
+`/admin/users` and `/admin/users/[id]`; camp chat with a composer and emotes (polled every 4 seconds), DM inbox and threads at `/messages`, "Rate your party" on completed camps, and badge medals on the character sheet; optional Discord sign-in (section 11). The player role has no direct DML on any table.
 
 MongoDB now requires authentication (section 10): `pdApi` for the web app, `pdWorker` for the worker, backfill and `demo-rud.js`.
 
-What does not exist yet: Discord sign-in, a polish pass, unread counts, websockets, and a dedicated MySQL login for the worker. Sections 11 and 12 spec the first two; the worker login is in section 10.
+What does not exist yet: a polish pass (section 12), unread counts, websockets, a dedicated MySQL login for the worker (section 10), the two `message` indexes (section 9) and linking Discord to an existing email account.
 
 A mascot change is in flight (separate agent, not you): the site mascot moves from the lavender `dice-32` die to
 `mascot-cat`, a white maneki-neko cat with a die standing on its corner (32 px sprite `mascot-cat`), and the favicon
@@ -93,12 +93,12 @@ Source of truth is `documents/DBMS Level 3.pdf`. This reuses the README's map an
 |---|---:|---|---|---|
 | ER diagram | 2 | Done | `documents/pairadice_erd.drawio` (9 pages, generated by `documents/tools/gen_erd.py`) | Only if you add tables: add them to the generator and rerun (section 7) |
 | Relational schema, keys, constraints | 3 | Done | `01_schema.sql`; drawio page 9 | Any new table needs adding to the generator |
-| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 319 checks in `06` | Keep the check count in README and DEMO in sync |
+| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 336 checks in `06` | Keep the check count in README and DEMO in sync |
 | NoSQL / vector DB creation | 4 | Done | `vector/src/schema.js`, `vector/scripts/init-db.js` | Mongo users `pdApi` and `pdWorker` are bound to the roles (section 10) |
 | Technology justification | 1 | Done | README, "Technology justification" (verified present, 3 subsections plus a table) | Re-read at the end |
 | DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 13; the player has no direct DML | None |
 | Nested / correlated / recursive, joins | 4 | Done | `05_sample_queries.sql` Q1 to Q18 | None |
-| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `13` | None |
+| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `14` | None |
 | NoSQL / vector feature with RUD | 7 | Done | `/admin/vector`, `vector/scripts/demo-rud.js`, hybrid Hearth | Vector Lab verified working through Mongo auth (section 10) |
 | Next.js UI | 3 | Mostly done | `web/`; chat, DMs and reviews are covered | Phase 7 polish |
 | Backend / API + DB integration | 2 | Done | server actions, per-role pools, `web/src/lib/mutations/` | None |
@@ -115,14 +115,13 @@ Efforts are rough working days for one person who already knows the repo.
 | done | Phase 6 Moderation (section 8) | | Built and tested on `phase-6-moderation` |
 | done | Phase 5 chat, DMs and reviews (section 9) | | Built and tested on `phase-5-chat`; closed the last direct player grants |
 | done | MongoDB authentication (section 10) | | Built on `mongo-auth` and verified live on 2026-11-11 |
-| 1 | Discord OAuth (section 11) | 1 day | Optional. Needs credentials from the owner |
-| 2 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
+| done | Discord OAuth (section 11) | | Verified live on 2026-11-11 |
+| 1 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
 
 If time runs short, cut in this order (first item is cut first):
 
-1. Discord OAuth. The button already says "coming soon", and the README documents it as a gap.
-2. Phase 7 extras: sound and motion toggles, extra mascot poses, new decorations.
-3. Admin game-catalogue management.
+1. Phase 7 extras: sound and motion toggles, extra mascot poses, new decorations.
+2. Admin game-catalogue management.
 
 Never cut: the tests for whatever you build; the README and DEMO sync; a full rehearsal.
 
@@ -155,7 +154,7 @@ Passwords for the five login flags come from `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_AP
 `PD_ADMIN_PWD` when set, otherwise from a hidden prompt. Re-running resets those passwords, and re-running
 `04_rbac.sql` detaches existing logins, so pass every login you want to keep on every run.
 
-Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, 12, 13, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
+Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, 12, 13, 14, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
 06 (tests) at the end. 04 must come after every procedure it grants on.
 
 Passwordless path (recommended on Linux, needs the `auth_socket` plugin):
@@ -198,7 +197,8 @@ Names only. `web/.env.example` is the full list. Never write values into a file 
 | `AUTH_SECRET` | HMAC key for session tokens, at least 32 bytes; required in production |
 | `PAIRADICE_DEV_AUTH` | `1` enables the dev "play as" switch (and only when `NODE_ENV=development`) |
 | `PAIRADICE_DEV_DB_FALLBACK` | `1` lets the web login fall back to `MYSQL_USER` / `MYSQL_PWD` in development |
-| `PAIRADICE_DISCORD_LOGIN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | reserved for section 11; no code reads them yet |
+| `PAIRADICE_DISCORD_LOGIN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in (section 11): off unless the flag is `1` and both credentials are set; export the flag in the shell, `dev:kc` loads only the two credentials |
+| `PAIRADICE_PUBLIC_URL` | production only: the public `https:` origin used to build the Discord redirect URI; login stays off without it |
 | `MONGO_URI` | per process, built from the environment and never written to a file: the `pdApi` URI for the web app, the `pdWorker` URI for the worker, backfill and `demo-rud.js`. Form `mongodb://USER:PASSWORD@127.0.0.1:27018/?directConnection=true&authSource=pairadice_vec` (password URL-encoded) |
 | `MONGO_DB` | database name, default `pairadice_vec` |
 | `MONGO_ROOT_PWD`, `MONGO_API_PWD`, `MONGO_WORKER_PWD` | passwords of `pdRoot` (setup only), `pdApi` and `pdWorker`; read by `vector/setup.sh` (or a hidden prompt) |
@@ -261,7 +261,7 @@ Run from `web/`:
 ```bash
 bun run typecheck      # tsc --noEmit
 bun run lint           # eslint
-bun test               # 134 pass, 0 fail in 15 files today
+bun test               # 149 pass, 0 fail in 16 files today
 MYSQL_PWD=... bun run check:chat   # 46 chat read checks; export MYSQL_PWD from the Keychain or a hidden prompt first
 bun run build          # runs bun run sprites first
 ```
@@ -310,7 +310,7 @@ database/
   03_seed.sql             12 users, 3 games, 10 sessions, reports, sanctions
   04_rbac.sql             six MySQL roles and every grant
   05_sample_queries.sql   Q1..Q18
-  06_constraint_tests.sql 319 checks; helpers t_expect_error, t_expect_msg, t_probe
+  06_constraint_tests.sql 336 checks; helpers t_expect_error, t_expect_msg, t_probe
   07_vector_outbox.sql    30 sync triggers, outbox procedures, v_outbox_dead
   08_auth.sql             sp_register_user
   09_sessions.sql         quest lifecycle procedures, 2 recommendation-outcome triggers
@@ -318,6 +318,7 @@ database/
   11_profiles.sql         9 profile-editing procedures
   12_moderation.sql       fn_staff_rank, 9 moderation and role procedures, ev_expire_sanctions
   13_chat.sql             fn_dm_refusal, 10 chat, DM and review procedures
+  14_discord.sql          sp_discord_login (EXECUTE to pairadice_auth only)
   setup.sh                loader (read --help)
   README.md               agent guide, GITIGNORED (local only)
 vector/
@@ -328,7 +329,7 @@ web/
   scripts/                build-sprites.ts, check-db-roles.ts, check-chat-reads.ts, dev-keychain.sh
   sprites/src/*.json      pixel sources; public/sprites/*.svg are generated
   src/proxy.ts            replaces middleware
-  src/app/(auth)/         sign-in, sign-up, actions.ts
+  src/app/(auth)/         sign-in, sign-up, actions.ts, auth/discord/route.ts and auth/discord/callback/route.ts
   src/app/(hearth)/       hearth, board, camp/[id], camp/new, party, friends, character,
                           character/edit, mod/** (Guild Hall), admin/vector, admin/users/**,
                           report/[userId], messages, messages/[userId], styleguide
@@ -339,7 +340,9 @@ web/
   src/components/         ui, hearth, auth, camp, character, quest, social, lab, mod, admin, report, chat, review
   src/lib/
     db.ts, db-roles.ts            per-role pools: queryAs, execAs, callProcAs, transactionAs
-    auth/                         guards, viewer, session, token, password, rate-limit, safe-next, signup-errors
+    auth/                         guards, viewer, session, token, password, rate-limit, safe-next, signup-errors,
+                                  discord-core.ts (pure: PKCE, state, URLs, cookie), discord.ts (token exchange, identity),
+                                  client-ip.ts, timezone.ts
     read-login.ts                 readCtx: picks the login for a read, fails closed to "web"
     mutations/                    run.ts (runAsViewer), sessions, participants, social, profile, moderation, report, admin, chat, review
     moderation/, report/, chat/, review/   plain validation modules with tests
@@ -543,76 +546,32 @@ now creates a login for the role `pairadice_vec_worker` (password from `PD_WORKE
 created on the owner's machine yet. Before switching, check the role's grants in `04_rbac.sql` against what the worker
 reads and updates (outbox, source tables, procedures), run the worker with it, and then update the README gap list.
 
-## 11. Discord OAuth sign-in (optional polish)
+## 11. Discord OAuth sign-in (done)
 
-State: `auth_account.provider` already allows `discord`, with a CHECK that a Discord row has `provider_user_id`, no
-`email` requirement and a NULL `password_hash`; `(provider, provider_user_id)` is unique. `web/.env.example` lists
-`PAIRADICE_DISCORD_LOGIN`, `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET`. No OAuth code exists: the sign-in form
-(`components/auth/SignInForm.tsx`) shows a disabled "Continue with Discord" button with a "coming soon" note.
+Automated checks pass, and the real end-to-end login was verified live on 2026-11-11 (consent, callback, a new player created, session started, PKCE accepted by Discord).
 
-### Credentials (read this first)
-
-- The project owner has created a Discord application. Its credentials live **only** in the owner's macOS Keychain,
-  account `pairadice`, items `pairadice/discord_client_id` and `pairadice/discord_client_secret`.
-- Get them from the owner over a private channel, or create your own Discord application for local testing. Never
-  commit, paste, log or screenshot them, and never put them in a `NEXT_PUBLIC_` variable.
-- Redirect URI to register in the Discord developer portal, exactly:
-  `http://127.0.0.1:3000/auth/discord/callback`.
-- The bot or application icon to upload is `brand/discord-icon.png` (a 64 px version and a circle preview sit beside it).
-- `web/scripts/dev-keychain.sh` does not load them yet. Add these two lines after `load auth_secret AUTH_SECRET`:
-
-```bash
-load discord_client_id DISCORD_CLIENT_ID
-load discord_client_secret DISCORD_CLIENT_SECRET
-```
-
-  The script warns when an item is missing, which will be every run on a Mac without them; make that pair optional if
-  the warning bothers you. `PAIRADICE_DISCORD_LOGIN` is not in the loader; export it in the shell.
-
-### Flow
-
-Routes: `GET /auth/discord` (start) and `GET /auth/discord/callback`. Put them in `web/src/app/(auth)/`, helpers in
-`web/src/lib/auth/discord.ts`, pure parts (PKCE, state check, username sanitising) in a module without `server-only`
-so they can be unit tested.
-
-1. **Feature flag.** Everything is off unless `PAIRADICE_DISCORD_LOGIN=1` and both credentials are present. When off,
-   both routes return 404 and the button stays disabled with the existing note. When on, the button becomes a link to
-   `/auth/discord` (carry the safe `next` value from `safe-next.ts`).
-2. **Start.** Generate a random `state` and a PKCE `code_verifier` (32 random bytes, base64url) with
-   `code_challenge = base64url(SHA-256(verifier))`. Store state, verifier and the safe `next` in one short-lived
-   cookie: `HttpOnly`, `SameSite=Lax` (Strict would drop the cookie on the cross-site return), `Secure` in
-   production, path `/auth`, 10 minutes. Use the `__Host-` prefix in production like the session cookie. Redirect to
-   Discord's authorize endpoint with `response_type=code`, `client_id`, `redirect_uri`, `scope=identify`,
-   `state`, `code_challenge`, `code_challenge_method=S256`. The `identify` scope is enough; do not ask for `email`.
-3. **Callback.** Read and delete the cookie. If the `state` query value does not equal the cookie value (compare in
-   constant time), or the cookie is missing, or Discord returned `error` (for example `access_denied`), redirect to
-   `/sign-in` with a friendly fixed message. Rate limit the callback with the existing `rate-limit.ts` helpers.
-4. **Code exchange, server side.** POST (form encoded) to Discord's token endpoint with `grant_type=authorization_code`,
-   `code`, `redirect_uri`, `code_verifier` and the client credentials in `Authorization: Basic`. Use `fetch` with a
-   timeout of about 8 seconds. Never log the code, the verifier or the tokens.
-5. **Identity.** GET `https://discord.com/api/users/@me` with the bearer token. Keep only the `id` (a snowflake
-   string), `username` and `global_name`. Discard the access token immediately; do not store it. The avatar is not
-   stored.
-6. **Link or create.** Call a new DEFINER procedure on the `pd_auth` login (`pairadice_auth`; add `GRANT EXECUTE`
-   in `04_rbac.sql`):
-   `sp_discord_login(p_discord_id, p_username_hint, p_display_hint, p_timezone, OUT p_user_id)`.
-   - If an `auth_account` row with that `provider_user_id` exists, return its `user_id`.
-   - Otherwise create `users`, an `auth_account(provider='discord')` row and the `player` role in one transaction,
-     like `sp_register_user` in `08_auth.sql`. Derive a valid username (`^[A-Za-z0-9_]{3,32}$`) from the hint and add a
-     numeric suffix on collision; the display name falls back to the username.
-   - **Do not auto-link by email or by username.** Matching an existing email account would be an account takeover
-     path. Linking an existing signed-in account to Discord belongs in a separate `sp_link_discord(actor, discord_id)`
-     reached from settings, and is optional.
-   - A banned user is refused at session lookup already (`u.status <> 'banned'` in `sessionFromToken`).
-7. **Session.** Call `startSession(userId, userAgent)` from `lib/auth/session.ts`, the same function sign-in uses; it
-   revokes the old token and sets the cookie. Then `redirect(next)`, outside any `try/catch`.
-
-### Tests and cautions
-
-Unit tests for state comparison, PKCE challenge, username sanitising and flag gating. In `06`: the procedure creates
-a user once and returns the same id on repeat, resolves a collision, refuses a banned account and cannot be called by
-`pairadice_web_ro` or `pairadice_player` (grant probes). The seed's fake Discord ids (for example
-`110000000000000001`) never match a real login, which is fine.
+- **Switch.** Off unless `PAIRADICE_DISCORD_LOGIN=1` and `DISCORD_CLIENT_ID` + `DISCORD_CLIENT_SECRET` are set;
+  production also needs an `https:` `PAIRADICE_PUBLIC_URL`. Off: both routes return 404 and the button stays disabled.
+- **Start** (`web/src/app/(auth)/auth/discord/route.ts`): sets a 10-minute HttpOnly, SameSite=Lax cookie with the state,
+  the PKCE verifier and the safe `next` (`__Host-pd_discord` in production), then redirects to
+  `https://discord.com/oauth2/authorize` with scope `identify`, the state and an S256 code challenge.
+- **Callback** (`.../discord/callback/route.ts`): deletes the cookie, checks the state in constant time, exchanges the code
+  at `https://discord.com/api/v10/oauth2/token` (HTTP Basic, form encoded, 8 s timeout), reads `id`, `username` and
+  `global_name` from `/users/@me`, discards the token, calls `sp_discord_login` on the auth login, starts the normal
+  session and redirects to `next`. Failures go to `/sign-in?error=discord`; a banned account to
+  `/sign-in?error=discord_refused`.
+- **`sp_discord_login`** (`database/14_discord.sql`, EXECUTE to `pairadice_auth` only): finds accounts only by Discord id
+  (never by email or username), refuses banned accounts, creates a new player (username sanitised from the Discord
+  username, `_2`, `_3` on collision) with no email or password, and retries on a duplicate-key race.
+- **PKCE** is sent as defence in depth; Discord's docs do not document it for the code grant. The constant
+  `DISCORD_PKCE` in `discord-core.ts` turns it off if Discord ever rejects it.
+- **Portal redirect URI**, exactly: `http://127.0.0.1:3000/auth/discord/callback`. On the owner's Mac `bun run dev:kc`
+  loads the two Keychain items (account `pairadice`); export the flag yourself. Others create their own Discord
+  application or get the credentials privately. Never commit, log or screenshot them.
+- **Not built:** linking Discord to an existing email account (a `sp_link_discord` reached from settings). Auto-linking
+  by email or username must stay out; it would be an account takeover path.
+- **Tests:** `discord-core.test.ts` (state, PKCE, URLs, cookie, flag gating, username rules), 17 more DB checks in `06`.
+  The seed's fake Discord ids never match a real login.
 
 ## 12. Phase 7: Polish
 
@@ -708,15 +667,15 @@ A phase is done when every line holds.
 2. Read this file and the README's "Architecture" and "Status" sections. Skim `database/04_rbac.sql` and
    `database/09_sessions.sql`: they are the two files whose patterns you will copy.
 3. Check MySQL is up (`mysql.server start` on a Mac) and Docker is running (`docker ps` shows `pairadice-mongo`).
-4. Reload the database with a login path from section 4, with `--tests`. Expect 319 of 319 passed.
+4. Reload the database with a login path from section 4, with `--tests`. Expect 336 of 336 passed.
 5. `./vector/setup.sh` (add `--recreate` once if the container predates auth), then start the worker in a second terminal with the pdWorker `MONGO_URI` (section 4).
-6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (134 pass) and `bun run build`.
+6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (149 pass) and `bun run build`.
    Delete `web/.next` if typecheck shows errors in files you did not touch.
 7. `bun run dev:kc` (Mac) or the socket command (Linux) with `PAIRADICE_DEV_AUTH=1`. Visit `/hearth`, `/board`,
    `/camp/10`, `/camp/3` (chat), `/messages`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
 8. Run `bun run check:db` (Mac with Keychain) to see the five logins prove their limits.
 9. Skim `database/12_moderation.sql` (the newest procedure file, a good pattern to copy) and open `/mod` as user 9.
-10. Branch, then start with the next item in section 3 (Discord OAuth, then Phase 7), tests first.
+10. Branch, then start with the next item in section 3 (Phase 7 polish; Discord OAuth is done), tests first.
 
 ## 16. Known stale docs and unverified items
 
@@ -725,7 +684,7 @@ Corrected or found stale while writing this:
 - The old `docs/handoff.md` (local, gitignored) described a project around Phases 1 and 2. It said no root README, no
   per-role pools, no Phase 4, 48 tests, 46 sprites, a Mongo container that fails to start, and logins "in progress";
   all of that is out of date. Do not use it.
-- The root README counts were corrected in Phase 5: 51 procedures, 9 functions, 55 triggers, 1 event, 319 checks.
+- The root README counts were corrected in Phase 5: 52 procedures, 9 functions, 55 triggers, 1 event, 336 checks (Discord sign-in added).
 - `web/README.md` is stale: it describes a read-only app with a "Sign-in arrives in Phase 2" gate, a single
   `MYSQL_PWD` login, and Phase 1 routes only. It was outside this handoff's scope; refresh it in Phase 7.
 - `bun run test` does not exist; the command is `bun test`.
@@ -737,11 +696,11 @@ Corrected or found stale while writing this:
 
 Verified on 2026-11-11: the Keychain items `pairadice/mongo_root`, `mongo_api` and `mongo_worker` exist and work, and MongoDB authentication works end to end (section 10).
 
+Verified on 2026-11-11 for Discord sign-in: the Keychain items `pairadice/discord_client_id` and `pairadice/discord_client_secret` are present; the authorize and token endpoints and the `identify` scope were checked against Discord's docs; automated checks pass (start route redirects with the right parameters and cookie, a callback without the cookie goes to `/sign-in?error=discord`, the sign-in page shows the enabled button, 336/336 DB checks, `check:db` probes: auth may run the procedure, player may not).
+
 Not verified on 2026-11-11:
 
-- The live MySQL state beyond the `--tests` run (319 of 319). Reload and rerun it first.
-- The two Discord Keychain items (`discord_client_id`, `discord_client_secret`). The loader reads them quietly if present.
+- The live MySQL state beyond the `--tests` run (336 of 336). Reload and rerun it first.
+- The real end-to-end Discord login (consent, callback, new account) was verified live on 2026-11-11.
 - The grants of `pairadice_vec_worker` against what the worker actually needs (section 10); the MySQL login for it does not exist yet.
-- Discord endpoints and scopes quoted in section 11 should be checked against Discord's current developer docs before
-  you build.
 - The viva date and any submission deadline are not recorded in the repo.

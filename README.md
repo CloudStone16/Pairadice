@@ -11,8 +11,8 @@ the core of the project. The web app shows that design working end to end.
 > **Viva walkthrough:** [`documents/DEMO.md`](documents/DEMO.md) is a 10-minute script in rubric order, with the
 > exact commands and seed IDs.
 >
-> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (Discord
-> login, polish, the worker MySQL login) with a full spec, the conventions and a first-hour checklist.
+> **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) lists what is left (polish,
+> the worker MySQL login, message indexes) with a full spec, the conventions and a first-hour checklist.
 
 The mascot is a white maneki-neko cat with a die standing on its corner. It is the sprite `mascot-cat` in
 `web/sprites/src/`, it is generated into the site favicon by `bun run sprites`, and the Discord application icon is
@@ -43,6 +43,7 @@ The mascot is a white maneki-neko cat with a die standing on its corner. It is t
 | **Character sheet** (`/character/[id]`) | Games, ranks, languages, badges, trust meter, friend / block buttons | `v_player_card`; badges, ratings and trust are kept up to date by triggers |
 | **Friends** (`/friends`) | Search players, requests, friends, blocked list | `sp_send_friend_request` … `sp_unblock_user`; `fn_is_blocked` hides blocked pairs everywhere |
 | **Sign in / up** | Email + password on a "Press start" title screen | `sp_register_user`; argon2id hashes, HMAC-hashed session tokens |
+| **Discord sign-in** (`/auth/discord`; optional, off by default) | A "Continue with Discord" button; the first login creates a player account with no email or password | `sp_discord_login` (14): finds the account by Discord id only, never by email or username; refuses banned accounts; EXECUTE granted to `pairadice_auth` only |
 | **Camp chat** (`/camp/[id]`) | A chat box with a composer, emote picker (`:gg:` tokens show as sprites) and new lines every 4 seconds; muted players see it disabled with the end time, suspended players read only | `sp_send_session_message`, `sp_chat_history`, `sp_delete_own_message`, `sp_my_chat_status`; 20 messages per 30 s, blocked players' lines hidden, deletes audited |
 | **Direct messages** (`/messages`, `/messages/[userId]`) | A "Chat" tab in the navigation, inbox and one-to-one threads, a Message link on friend rows and the character sheet, recent DMs on the Hearth | `sp_send_dm`, `sp_dm_thread`, `sp_dm_inbox`, `sp_dm_can_message`; only friends or players who shared a camp, never across a block |
 | **Rate your party** (completed camps) | Stars and an optional comment for each teammate; medals for badges on the character sheet | `sp_write_review`, `sp_pending_reviews`; once per pair per completed camp; triggers refresh ratings, trust and badges |
@@ -73,7 +74,7 @@ flowchart LR
 
   subgraph MySQL["MySQL 8 — pairadice (source of truth)"]
     T[("45 tables<br/>4 views")]
-    R["51 procedures · 9 functions<br/>55 triggers · 1 event"]
+    R["52 procedures · 9 functions<br/>55 triggers · 1 event"]
     OB[("embedding_outbox")]
   end
 
@@ -177,6 +178,7 @@ Three ideas carry the design:
 | HMAC-SHA256 session tokens | The database stores only `BINARY(32)` hashes, so a leaked `auth_token` table cannot be replayed |
 | Socket (`auth_socket`) or Keychain-stored password logins in development | No database passwords in files or shell history |
 | UTC everywhere | Every connection runs `time_zone = '+00:00'`; pages render in the viewer's timezone |
+| Discord OAuth2 with state + PKCE | `identify` scope only, no tokens stored; accounts are matched by Discord id, so a profile cannot take over an email account |
 | Hand-made SVG sprite pipeline | The cosy pixel-art look without image licences (`web/sprites/`) |
 
 ---
@@ -188,11 +190,11 @@ Three ideas carry the design:
 | Tables | 45 | `database/01_schema.sql` |
 | Views | 4 | `v_open_sessions`, `v_player_card`, `v_session_roster` (02), `v_outbox_dead` (07) |
 | Functions | 9 | `fn_is_blocked`, `fn_are_friends`, `fn_user_active`, `fn_trust_score`, `fn_has_permission`, `fn_platform_compatible`, `fn_local_time`, `fn_staff_rank` (12), `fn_dm_refusal` (13) |
-| Procedures | 51 | recommendations (02), outbox (07), auth (08), quest lifecycle (09), friends and blocks (10), profile editing (11), moderation and roles (12), chat, DMs and reviews (13) |
+| Procedures | 52 | recommendations (02), outbox (07), auth (08), Discord sign-in (14), quest lifecycle (09), friends and blocks (10), profile editing (11), moderation and roles (12), chat, DMs and reviews (13) |
 | Events | 1 | `ev_expire_sanctions` (12): every 5 minutes runs `sp_expire_sanctions` (needs `event_scheduler = ON`, the MySQL 8 default) |
 | Triggers | 55 | 23 integrity / derived-value / audit (02), 30 vector sync (07), 2 recommendation outcome (09) |
 | MySQL roles | 6 | `pairadice_web_ro`, `pairadice_auth`, `pairadice_player`, `pairadice_moderator`, `pairadice_admin`, `pairadice_vec_worker` |
-| Database checks | 319 | `database/06_constraint_tests.sql`: must-fail statements, exact-error assertions, grant probes and behaviour checks |
+| Database checks | 336 | `database/06_constraint_tests.sql`: must-fail statements, exact-error assertions, grant probes and behaviour checks |
 | Chat read checks | 46 | `web/scripts/check-chat-reads.ts`: row filtering of the chat read procedures (run with `bun run check:chat`) |
 | Sample queries | 18 | `database/05_sample_queries.sql`: joins, nested, correlated, recursive CTEs, windows, procedures |
 | MongoDB collections | 2 | `player_embeddings`, `session_embeddings` (strict `$jsonSchema` validators, B-tree and vector indexes) |
@@ -218,8 +220,9 @@ generated by [`documents/tools/gen_erd.py`](documents/tools/gen_erd.py), and pag
 | `11_profiles.sql` | Profile-editing procedures (self-only writes) |
 | `12_moderation.sql` | Report, sanction, message-moderation and role procedures, `fn_staff_rank`, and the `ev_expire_sanctions` event |
 | `13_chat.sql` | Camp chat, DM and review procedures, `fn_dm_refusal` (loaded after 12, before the seed) |
+| `14_discord.sql` | `sp_discord_login`: finds or creates the player behind a Discord id (loaded after 13, before the seed) |
 
-`database/setup.sh` loads them in the order 01, 02, 08, 09, 10, 11, 12, 13, 03, 04, 07 (tests last). You do not need to load them by hand.
+`database/setup.sh` loads them in the order 01, 02, 08, 09, 10, 11, 12, 13, 14, 03, 04, 07 (tests last). You do not need to load them by hand.
 
 ---
 
@@ -242,8 +245,8 @@ generated by [`documents/tools/gen_erd.py`](documents/tools/gen_erd.py), and pag
 ./database/setup.sh -u <admin_login> -S /var/run/mysqld/mysqld.sock -y --tests --socket-logins "$USER"
 ```
 
-`--tests` runs 319 checks (must-fail statements, exact-error assertions, grant probes and behaviour checks) and
-reports `319/319 passed`. Run `./database/setup.sh --help` for every
+`--tests` runs 336 checks (must-fail statements, exact-error assertions, grant probes and behaviour checks) and
+reports `336/336 passed`. Run `./database/setup.sh --help` for every
 option. The script **drops and recreates** the `pairadice` database, and `-y` skips the confirmation.
 
 `--socket-logins` creates `pd_web_sock`, `pd_auth_sock`, `pd_player_sock`, `pd_mod_sock` and `pd_admin_sock`, one
@@ -320,11 +323,30 @@ so you can act as any seed player. Sign-in and sign-up are rate limited (per IP,
 the old session token, and sign-up errors are fixed messages. The seed accounts have placeholder password hashes, so they cannot sign in with
 a password. To try real sign-in, create an account at `/sign-up`.
 
+### Discord sign-in
+
+Off by default. It runs only when `PAIRADICE_DISCORD_LOGIN=1` and both `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` are
+set; production also needs an `https:` `PAIRADICE_PUBLIC_URL`. While it is off, `/auth/discord` and
+`/auth/discord/callback` return 404 and the button stays disabled.
+
+- Register the redirect URI `http://127.0.0.1:3000/auth/discord/callback` in your Discord application (Developer Portal,
+  OAuth2), exactly as written.
+- On the owner's Mac, `bun run dev:kc` loads `pairadice/discord_client_id` and `pairadice/discord_client_secret` from the
+  Keychain; also `export PAIRADICE_DISCORD_LOGIN=1`. Anyone else creates their own Discord application or gets the
+  credentials privately. Never commit them.
+- Flow: the start route sets a 10-minute HttpOnly cookie holding the state, a PKCE verifier and the safe `next` path, then
+  redirects to Discord with scope `identify`. The callback checks the state in constant time, exchanges the code, reads
+  `id`, `username` and `global_name`, discards the token, calls `sp_discord_login` and starts the normal session.
+  Failures go to `/sign-in?error=discord`; a banned account goes to `/sign-in?error=discord_refused`.
+
 Every environment variable is listed by name in [`web/.env.example`](web/.env.example). Real values belong in your
 shell, never in a file. The vector store uses these:
 
 | Variable | Used by | Meaning |
 |---|---|---|
+| `PAIRADICE_DISCORD_LOGIN` | web app | `1` switches Discord sign-in on (needs the two below) |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | web app | Discord application credentials (never committed) |
+| `PAIRADICE_PUBLIC_URL` | web app, production | Public `https:` origin used to build the redirect URI |
 | `MONGO_ROOT_PWD` | `vector/setup.sh` | Root user `pdRoot` password (setup only) |
 | `MONGO_API_PWD` | `vector/setup.sh`, `dev-keychain.sh` | Password of `pdApi` (read-only) |
 | `MONGO_WORKER_PWD` | `vector/setup.sh`, `env-from-keychain.sh` | Password of `pdWorker` (read/write) |
@@ -336,7 +358,7 @@ shell, never in a file. The vector store uses these:
 |---|---|
 | Types | `bun run typecheck` |
 | Lint | `bun run lint` |
-| Unit tests | `bun test` (134 tests) |
+| Unit tests | `bun test` (149 tests) |
 | Production build | `bun run build` |
 | Database logins and grants | `bun run check:db` (needs the Keychain items) |
 | Chat read procedures | `bun run check:chat` (46 checks; reads the password from the `MYSQL_PWD` environment variable, `MYSQL_USER` defaults to `root`) |
@@ -365,7 +387,7 @@ documents/    ER diagram (drawio), its generator, rubric PDF, DEMO.md
 |---|---:|---|
 | ER diagram | 2 | `documents/pairadice_erd.drawio` (9 pages, Chen notation) |
 | Relational schema with keys and constraints | 3 | `01_schema.sql`; drawio page 9 |
-| SQL DDL with constraints | 4 | `01_schema.sql`: PK/FK/UNIQUE/CHECK; 319 checks in `06` |
+| SQL DDL with constraints | 4 | `01_schema.sql`: PK/FK/UNIQUE/CHECK; 336 checks in `06` |
 | NoSQL / vector DB creation | 4 | `vector/src/schema.js` (validators, indexes, vector indexes, roles), `vector/scripts/init-db.js` |
 | Technology justification | 1 | [Technology justification](#technology-justification) above |
 | DML | 4 | `03_seed.sql`; every app write is a procedure in 08–13 |
@@ -391,12 +413,12 @@ sign-in with per-role database logins; hosting, joining and managing quests; fri
 user and role management at `/admin/users`, all written through `database/12_moderation.sql`. Reports, sanctions and
 message hiding no longer have direct grants, and expired sanctions are now ended by the `ev_expire_sanctions` event
 (the sanctions page also runs the expiry procedure on load, so a server with the scheduler off still converges).
-**Camp chat, DMs and reviews** (Phase 5) are done too: composer, emotes, inbox and threads, "Rate your party" and badge
+**Discord sign-in** is built (optional; see [Discord sign-in](#discord-sign-in)); its automated checks pass and the
+real end-to-end login was verified live on 2026-11-11 (consent, callback, a new player created, session started, PKCE accepted by Discord). **Camp chat, DMs and reviews** (Phase 5) are done too: composer, emotes, inbox and threads, "Rate your party" and badge
 medals, all written through `database/13_chat.sql`. The player role now has no direct DML on any table.
 
 Not done yet (each has a full spec in [`documents/HANDOFF.md`](documents/HANDOFF.md)):
 
-- **Discord login.** The `auth_account` table supports it, but it stays switched off until a Discord app is set up.
 - **Polish** (Phase 7): empty / loading / error states, an accessibility and mobile pass, and a final docs and demo sync.
 - **Worker MySQL login.** `database/setup.sh --worker-user` can create a login for `pairadice_vec_worker`, but it is not
   created on the owner's machine yet, so the worker still uses `MYSQL_USER` / `MYSQL_PWD`. Check the role's grants against
@@ -404,6 +426,7 @@ Not done yet (each has a full spec in [`documents/HANDOFF.md`](documents/HANDOFF
 
 Known gaps and limits:
 
+- Discord accounts are not linked to existing email accounts: a Discord login always finds or creates its own player.
 - Chat uses polling (every 4 seconds), not websockets, and unread counts are not built.
 - An index on `message(sender_id, sent_at)` and one on `message(session_id, message_id)` would speed up the rate limit
   and chat history. They are not applied because existing tables are not to be altered; adding them needs the owner's
