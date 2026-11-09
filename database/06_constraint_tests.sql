@@ -90,6 +90,25 @@ CALL t_expect_error('PROC: sign-up with a taken username', "CALL sp_register_use
 CALL t_expect_error('PROC: sign-up with a used email',    "CALL sp_register_user('brand_new', 'X', 'UTC', ' Aarav@Example.com ', '$argon2id$v=19$probe', @t_uid)");
 CALL t_expect_error('PROC: sign-up with a bad email',     "CALL sp_register_user('brand_new', 'X', 'UTC', 'not-an-email', '$argon2id$v=19$probe', @t_uid)");
 
+-- session lifecycle procedures (09_sessions.sql)
+CALL t_expect_error('PROC: host requests to join own session', "CALL sp_request_join(1, 1, 4, 1)");
+CALL t_expect_error('PROC: join a cancelled session',          "CALL sp_request_join(1, 6, NULL, NULL)");
+CALL t_expect_error('PROC: join a completed session',          "CALL sp_request_join(12, 3, NULL, NULL)");
+UPDATE lfg_session SET visibility = 'invite' WHERE session_id = 10;
+CALL t_expect_error('PROC: join an invite-only session',       "CALL sp_request_join(1, 10, NULL, NULL)");
+UPDATE lfg_session SET visibility = 'public' WHERE session_id = 10;
+CALL t_expect_error('PROC: join friends-only as a non-friend', "CALL sp_request_join(4, 8, NULL, NULL)");
+CALL t_expect_error('PROC: join with another user''s account', "CALL sp_request_join(12, 10, NULL, 4)");
+CALL t_expect_error('PROC: join with a wrong-platform account', "CALL sp_request_join(1, 10, NULL, 2)");
+CALL t_expect_error('PROC: decline as a non-host player',      "CALL sp_decline_participant(8, 1, 2)");
+CALL t_expect_error('PROC: kick the host',                     "CALL sp_kick_participant(1, 1, 1)");
+CALL t_expect_error('PROC: host cannot leave own session',     "CALL sp_withdraw_or_leave(1, 1)");
+CALL t_expect_error('PROC: status completed -> open',          "CALL sp_set_session_status(2, 3, 'open')");
+CALL t_expect_error('PROC: status open -> completed',          "CALL sp_set_session_status(1, 1, 'completed')");
+CALL t_expect_error('PROC: status change by a non-host player', "CALL sp_set_session_status(8, 1, 'cancelled')");
+CALL t_expect_error('PROC: create a session with an empty title', "CALL sp_create_session(4, 1, 1, 1, 12, '   ', NULL, 4, NULL, FALSE, FALSE, 'public', 'auto', NULL, NULL, NULL, 2, 7, NULL, JSON_ARRAY('en'), NULL, @t_sid)");
+CALL t_expect_error('PROC: create a session with no languages',  "CALL sp_create_session(4, 1, 1, 1, 12, 'Valid title', NULL, 4, NULL, FALSE, FALSE, 'public', 'auto', NULL, NULL, NULL, 2, 7, NULL, JSON_ARRAY(), NULL, @t_sid)");
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
 DROP PROCEDURE t_expect_error;
