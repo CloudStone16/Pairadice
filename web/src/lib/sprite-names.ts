@@ -5,6 +5,7 @@
 export const SPRITE_NAMES = [
   "dice-32",
   "dice-16",
+  "mascot-cat",
   "cart-minecraft",
   "cart-valorant",
   "cart-fortnite",

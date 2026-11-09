@@ -2,6 +2,7 @@
 export const SPRITES = {
   "dice-32": { size: 32 },
   "dice-16": { size: 16 },
+  "mascot-cat": { size: 32 },
   "cart-minecraft": { size: 32 },
   "cart-valorant": { size: 32 },
   "cart-fortnite": { size: 32 },
