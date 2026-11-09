@@ -92,6 +92,12 @@ export const SPRITES = {
   "icon-database": { size: 16 },
   "icon-vector": { size: 16 },
   "guild-hall-banner-32": { size: 32 },
+  "icon-user-add": { size: 16 },
+  "icon-user-remove": { size: 16 },
+  "icon-user-check": { size: 16 },
+  "icon-block": { size: 16 },
+  "icon-unblock": { size: 16 },
+  "icon-mail-incoming": { size: 16 },
 } as const;
 
 export type BuiltSpriteName = keyof typeof SPRITES;

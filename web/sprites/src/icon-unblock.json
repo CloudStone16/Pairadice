@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "b": "#4a6fc0",
+  "E": "#8a5a3c",
+  "e": "#f2a65a",
+  "k": "#120e1f",
+  "w": "#fffaf0",
+  "r": "#e8665f",
+  "g": "#72c374",
+  "G": "#3f8a4a"
+ },
+ "rows": [
+  "................",
+  ".....kkkkkk.....",
+  "....kEEEEEEk....",
+  "....kekeekek....",
+  "....keeeeeek....",
+  ".....kkkkkk.....",
+  "...kkbbbbbbkk...",
+  "..kbbbbbbbbbbk..",
+  "..kbbbbbbbbbbk..",
+  "kkkk.kbbbbk.kkkk",
+  "kgwk.kbbbbk.kwgk",
+  "kwgk.kbbbbk.kgwk",
+  "kkkk.kbbbbk.kkkk",
+  ".kGk.kbbbbk.kGk.",
+  ".kGk.kbbbbk.kGk.",
+  ".kkk.kkkkkk.kkk."
+ ],
+ "notes": "person walking through an opened gap between two gate posts: unblock"
+}

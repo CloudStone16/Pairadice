@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "w": "#fffaf0",
+  "g": "#72c374"
+ },
+ "rows": [
+  "......kkkk......",
+  "......kggk......",
+  "......kggk......",
+  "...kkkkggkkkk...",
+  "....kggggggk....",
+  ".....kggggk.....",
+  "......kggk......",
+  ".......kk.......",
+  "kkkkkkkkkkkkkkkk",
+  "kwkwwwwwwwwwwkwk",
+  "kwwkwwwwwwwwkwwk",
+  "kwwwkwwwwwwkwwwk",
+  "kwwwwkkkkkkwwwwk",
+  "kwwwwwwwwwwwwwwk",
+  "kwwwwwwwwwwwwwwk",
+  "kkkkkkkkkkkkkkkk"
+ ],
+ "notes": "envelope with an arrow dropping in: incoming request"
+}

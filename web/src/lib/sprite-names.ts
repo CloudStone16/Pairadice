@@ -98,6 +98,13 @@ export const SPRITE_NAMES = [
   "icon-database",
   "icon-vector",
   "guild-hall-banner-32",
+  // Phase 5 (friends)
+  "icon-user-add",
+  "icon-user-remove",
+  "icon-user-check",
+  "icon-block",
+  "icon-unblock",
+  "icon-mail-incoming",
 ] as const;
 
 export type SpriteName = (typeof SPRITE_NAMES)[number];
