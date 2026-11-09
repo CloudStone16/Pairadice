@@ -16,9 +16,22 @@ cd Pairadice
 ADMIN=<your MySQL admin login>          # e.g. root, or your auth_socket admin login
 SOCK=/var/run/mysqld/mysqld.sock
 
-./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # summary: passed = total = 66
+./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 153/153 passed
 ./vector/setup.sh                                                               # needs Docker running
 ```
+
+If your MySQL has no `auth_socket` plugin, create password logins instead and keep their passwords in the macOS
+Keychain (account `pairadice`, service `pairadice/<key>`, keys `pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin`,
+`auth_secret`). Export `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_APP_PWD`, `PD_MOD_PWD` and `PD_ADMIN_PWD` from the Keychain
+with `security find-generic-password -a pairadice -s pairadice/<key> -w`, or leave them unset for hidden prompts:
+
+```bash
+./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --web-user pd_web --auth-user pd_auth \
+    --app-user pd_api --mod-user pd_mod --admin-user pd_admin
+```
+
+Terminal B then starts with `bun run dev:kc` (it loads the logins from the Keychain). With password logins, use
+`pd -u pd_api -p` style commands in the RBAC step below, which prompt for the password.
 
 Open three terminals:
 
@@ -95,12 +108,12 @@ the other kinds of constraint:
   session's game.
 
 ```bash
-grep -c "CALL t_expect_error" database/06_constraint_tests.sql      # 66
+grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 131, plus 22 behaviour rows = 153
 grep -o "t_expect_error('[^']*'" database/06_constraint_tests.sql | head -12
 ```
 
-> "66 statements that the database **must reject**: CHECKs, FKs, triggers, RBAC and procedure rules. The setup run
-> ended with 66/66 PASS."
+> "153 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
+> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 153/153 passed."
 
 ## 2:30 – 4:00 · DML and queries (4 marks)
 
@@ -150,7 +163,7 @@ Expected output: Jake is `suspended`, there are two audit rows (`users status_ch
 the rollback he is `active` again.
 
 > "Before the insert, a trigger checks `fn_has_permission(issued_by, 'user.sanction')`. A player cannot issue a
-> sanction, and a moderator cannot issue a **ban**; only admins hold `user.ban`. Both are among the 66 tests."
+> sanction, and a moderator cannot issue a **ban**; only admins hold `user.ban`. Both are among the 153 checks."
 
 **Transaction with a row lock.** `sp_accept_participant` locks the session row (`SELECT … FOR UPDATE`) before it
 fills a seat, so two accepts at the same moment cannot overbook. You will see it live in the UI step below.
@@ -165,9 +178,26 @@ pd -u pd_player_sock -e "SELECT CURRENT_ROLE(); SELECT * FROM audit_log LIMIT 1"
 pd -u pd_mod_sock    -e "SELECT CURRENT_ROLE(); SELECT COUNT(*) FROM audit_log"       # allowed
 ```
 
-> "The web server reads every page through `pairadice_web_ro`, which cannot even see the credentials table.
-> Only `pairadice_auth` touches `auth_account` and `auth_token`. Each signed-in request writes through the login that
-> matches the user's role, so even an SQL-injection bug in a page read could not reach a password hash."
+With password logins, the sharpest one-liner is the same query as two logins (add `-p` if you did not export
+`MYSQL_PWD`):
+
+```bash
+pd -u pd_web -e "SELECT COUNT(*) FROM message"   # ERROR 1142: SELECT command denied
+pd -u pd_api -e "SELECT COUNT(*) FROM message"   # allowed
+```
+
+Then let the script prove every login at once:
+
+```bash
+cd web && bun run check:db     # each login's identity, one forbidden action each, and one allowed action
+```
+
+> "Anonymous page reads use `pairadice_web_ro`, which cannot see the credentials table, private messages,
+> friendships or blocks, and cannot run the recommender. A signed-in request, read or write, runs on the viewer's own
+> role login and fails closed to the anonymous one if the session does not match. The player role has no direct DML
+> on sessions or friendships; it writes only through DEFINER procedures, which refuse NULL or suspended actors. The
+> admin role has no DDL and no GRANT OPTION. Only `pairadice_auth` touches `auth_account` and `auth_token`, so even
+> an SQL-injection bug in a page read could not reach a password hash."
 
 Then in the browser:
 
@@ -226,7 +256,7 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 
 - Docs: the README (architecture, technology justification, rubric map) and this script. Git history: small,
   focused commits for each piece.
-- Honest gaps: Discord login, profile editing, chat, and the moderation UI are not built yet. Moderation works in
+- Honest gaps: Discord login, chat, and the moderation UI are not built yet. Moderation works in
   SQL, as shown above.
 
 ---
@@ -240,4 +270,4 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 | A neighbour list is empty right after an edit | The vector index is eventually consistent (hundreds of ms); refresh |
 | "Upcoming" sessions are in the past | Reload: `./database/setup.sh … -y --tests`, then `./vector/setup.sh` |
 | "Knock to join" refused after an earlier rehearsal | Aarav is already in camp 10; reload the database |
-| Test summary below 66 | Reload once and rerun before investigating |
+| Test summary below 153/153 | Reload once and rerun before investigating |
