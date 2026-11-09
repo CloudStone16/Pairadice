@@ -12,8 +12,9 @@ the core of the project. The web app shows that design working end to end.
 > exact commands and seed IDs.
 >
 > **Picking up the project:** [`documents/HANDOFF.md`](documents/HANDOFF.md) is the maintainer's guide: environment,
-> conventions, seed users, a first-hour checklist and the short list of what could come next.
-> The web app has its own [`web/README.md`](web/README.md).
+> conventions, seed users, a first-hour checklist and what is still left (section 3).
+> The web app has its own [`web/README.md`](web/README.md). Working with AI agents? Follow [`CLAUDE.md`](CLAUDE.md)
+> and HANDOFF section 17: run the work through ECC (Everything Claude Code) agents, which is required for efficiency.
 
 The mascot is a white maneki-neko cat with a die standing on its corner. It is the sprite `mascot-cat` in
 `web/sprites/src/`, it is generated into the site favicon by `bun run sprites`, and the Discord application icon is

@@ -2,7 +2,8 @@
 
 Last updated: 2026-11-10. All phases (0 to 7) are complete and merged: the schema, vector store, auth, quests, social,
 profiles, moderation, chat, DMs and reviews, MongoDB authentication, Discord sign-in and the final polish. What remains is
-a short list of optional extras (section 3). The Phase 7 summary is in section 12.
+a short list of checks, open gaps and small issues (section 3). The Phase 7 summary is in section 12. If you work with
+AI agents, follow section 17 (the same workflow built Phases 5 to 7, using ECC).
 This file is now the maintainer's guide: where things are, how to run them, the conventions and the traps. It is tracked
 in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
 
@@ -15,7 +16,7 @@ Keychain items. Keep it that way if you edit it.
 
 1. [State of the project](#1-state-of-the-project)
 2. [Rubric map](#2-rubric-map)
-3. [What to do next if you continue](#3-what-to-do-next-if-you-continue)
+3. [What is still left (for Arjun)](#3-what-is-still-left-for-arjun)
 4. [Environment and running](#4-environment-and-running)
 5. [Seed users and test accounts](#5-seed-users-and-test-accounts)
 6. [File map](#6-file-map)
@@ -29,6 +30,7 @@ Keychain items. Keep it that way if you edit it.
 14. [Definition of done](#14-definition-of-done)
 15. [First hour checklist](#15-first-hour-checklist)
 16. [Known stale docs and unverified items](#16-known-stale-docs-and-unverified-items)
+17. [How to work on this repo with agents (use ECC)](#17-how-to-work-on-this-repo-with-agents-use-ecc)
 
 ---
 
@@ -105,22 +107,57 @@ Source of truth is `documents/DBMS Level 3.pdf`. This reuses the README's map an
 | Documentation and Git/GitHub | 2 | Done | README, `web/README.md`, DEMO, this file, history | Keep counts in sync |
 | Originality, individual contribution, viva | 4 | Depends on you | `documents/DEMO.md` | Rehearse; keep the app explainable |
 
-## 3. What to do next if you continue
+## 3. What is still left (for Arjun)
 
-Nothing here is needed for the project to be complete. In rough order of value:
+The graded scope is complete. Everything below is what was deliberately left, not verified, or noticed but not fixed.
+Work through it in this order; before starting, read section 17 (how to run the work with agents and ECC).
 
-1. **Worker MySQL login.** Create it with `database/setup.sh --worker-user NAME`, check the grants of
-   `pairadice_vec_worker` against what the worker reads and updates (section 10), run the worker with it, then drop the
-   gap from the README.
-2. **Message indexes.** `message(sender_id, sent_at)` and `message(session_id, message_id)` speed up the chat rate limit
-   and history. They alter an existing table, so they need the owner's OK first.
-3. **Unread counts.** Needs a new read-tracking table (for example `message_read`), added in a new numbered file and to
-   the ER generator.
-4. **Websockets** instead of the 4-second polling of `/api/chat/[sessionId]` and `/api/dm/[userId]`.
-5. **Link Discord to an existing email account** from a settings screen (a `sp_link_discord` procedure). Never link
-   automatically by email or username: that is an account takeover path.
-6. **Sound and motion toggles** (sprites `icon-sound-on`, `icon-sound-off`, `icon-motion-on`, `icon-motion-off`).
-7. Admin game-catalogue management.
+### 3a. Before the viva (do these)
+
+1. **Full rehearsal on your own machine.** Reload from scratch (`./database/setup.sh ... --tests`, expect 336/336),
+   `./vector/setup.sh` (with the three Mongo passwords; `--recreate` the first time), `cd web && bun run check:chat`
+   (46/46) and, on a Mac with the Keychain, `bun run check:db`. Then run `documents/DEMO.md` end to end against the clock
+   (10 minutes). The owner's Mac run passed on 2026-11-10; a second machine (ideally Linux with socket logins, which is
+   the path DEMO is written for) has not been tried.
+2. **Keyboard-only and screen-reader walkthrough.** The Phase 7 accessibility pass was a code review plus a 375 px
+   overflow check in the browser. Nobody has done a keyboard-only run with the console open, or a VoiceOver/NVDA pass,
+   of `/mod/**`, `/admin/users/**`, `/report/**`, `/messages/**`, camp chat and the review form.
+3. **Viva preparation.** Be able to explain: per-role MySQL logins and why the player has no direct DML; DEFINER
+   procedures as the only write path; the moderation conflict-of-interest and staff-rank rules; the chat named lock
+   (`GET_LOCK`) that replaced a users-row lock to avoid a deadlock; the outbox → worker → MongoDB sync; Mongo
+   least-privilege users; Discord OAuth with state + PKCE and why accounts are never linked by email.
+
+### 3b. Open gaps (decide or build)
+
+1. **Worker MySQL login.** `database/setup.sh --worker-user NAME` exists but no login was created (it needs a new
+   password, kept in the Keychain or the environment, never in a file). First check that `pairadice_vec_worker` has
+   every grant the worker needs (it reads the source tables and reads/updates `embedding_outbox`); then run the worker
+   with `MYSQL_USER` set to it and drop the gap from the README.
+2. **Message indexes (needs the owner's OK).** `message(sender_id, sent_at)` for the rate-limit count and
+   `message(session_id, message_id)` for chat history. They alter an existing table, which the owner's rule forbids
+   without approval. Ask first; if approved, add them in a new numbered file, not in `01_schema.sql`.
+3. **Unread counts.** Needs a new read-tracking table (for example `message_read`), in a new numbered file, added to
+   `documents/tools/gen_erd.py`, with procedures and tests.
+4. **Websockets** instead of 4-second polling of `/api/chat/[sessionId]` and `/api/dm/[userId]`. Optional.
+5. **Link Discord to an existing email account** from a settings screen (`sp_link_discord(actor, discord_id)`).
+   Never link automatically by email or username: that is an account takeover path.
+6. **Sound and motion toggles and decorations** (sprites `icon-sound-on`, `icon-sound-off`, `icon-motion-on`,
+   `icon-motion-off`, `deco-*`). Cut on purpose; build only if time allows.
+7. **Admin game-catalogue management.** Optional.
+
+### 3c. Small known issues (found in review, not fixed)
+
+| Issue | Where | Note |
+|---|---|---|
+| Focus outline may be clipped on the outermost table cells between about 640 and 1000 px | `/mod/reports`, `/mod/sanctions`, `/mod/audit` (tables inside a Window with `overflow-x-auto`) | Add padding inside the scroll container or use an inset focus ring |
+| `FormAlert` in the Lift form jumps from h2 to h4 | `src/components/mod/ActionForm.tsx` / `LiftForm.tsx` | Pass heading level 3 |
+| Discord sign-ups always get timezone `UTC` | `src/app/(auth)/auth/discord/callback/route.ts` | The callback has no browser timezone; the player can change it at `/character/edit`, or pass the browser timezone through the start link |
+| Rate limits share one bucket when there is no `X-Forwarded-For` | `src/lib/auth/client-ip.ts` (`"local"`) | Same as email sign-in; fine locally, set up a proxy header in production |
+| A mute lifted in the same second it was issued still blocks chat for up to one more second | `sp_lift_sanction`, `ck_sn_period` | Fixing it needs a schema change (`DATETIME(6)`), so leave it unless the owner agrees |
+| `demo-rud.js` needs the `pdWorker` URI, not `pdApi` | `vector/scripts/demo-rud.js` | It writes through the outbox drain; DEMO already says so |
+| `sp_dm_inbox` scans every DM the viewer has on each poll | `database/13_chat.sql` | Fine at demo scale; a conversation summary table would fix it |
+| Empty states now show the sleeping cat instead of each screen's own icon | `src/components/hearth/EmptyState.tsx` (default `mascot="sleep"`) | Pass `mascot={false}` where the icon is more useful |
+| The `pdApi` Mongo password briefly appeared on a command line during setup testing | local dev only | Optional: rotate it (Keychain item `pairadice/mongo_api`, then `./vector/setup.sh` to update the user) |
 
 Never skip, whatever you build: tests for it, the README and DEMO sync, and a full rehearsal of the DEMO.
 
@@ -665,7 +702,7 @@ A phase is done when every line holds.
    `/camp/10`, `/camp/3` (chat), `/messages`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
 8. Run `bun run check:db` (Mac with Keychain) to see the five logins prove their limits.
 9. Skim `database/12_moderation.sql` (the newest procedure file, a good pattern to copy) and open `/mod` as user 9.
-10. Branch, then pick an item from section 3, tests first.
+10. Read section 17 (agents and ECC), branch, then pick an item from section 3, tests first.
 
 ## 16. Known stale docs and unverified items
 
@@ -693,3 +730,72 @@ Not verified on 2026-11-10:
 - The real end-to-end Discord login (consent, callback, new account) was verified live on 2026-11-10.
 - The grants of `pairadice_vec_worker` against what the worker actually needs (section 10); the MySQL login for it does not exist yet.
 - The viva date and any submission deadline are not recorded in the repo.
+
+## 17. How to work on this repo with agents (use ECC)
+
+Phases 5, 6 and 7, MongoDB authentication and Discord sign-in were built by one orchestrating Claude Code session that
+dispatched smaller agents. Use the same workflow: it kept the database, web and docs in step, and every phase passed
+review before it was merged. The tracked `CLAUDE.md` and `AGENTS.md` at the repo root point coding agents here, so
+Claude Code and other agents pick these rules up automatically.
+
+**Use ECC. It is required, not optional.** ECC (Everything Claude Code) is the Claude Code plugin that provides the
+specialised `ecc:*` agents, skills and hooks used here. It is much more efficient than general-purpose agents: each
+agent type arrives with the right tools and a narrow job, so briefs stay short and output comes back reviewable. Install
+or update it in Claude Code (the `ecc:configure-ecc` skill guides you; `ecc:ecc-guide` lists what it offers), and run
+agents with the `ecc:` types below.
+
+### The loop, per phase
+
+1. **Branch.** One branch per phase or feature (`phase-N-name`). Never work on `main` directly.
+2. **Write the contract first.** Before dispatching anyone, the orchestrator writes a small types-and-comments file
+   that fixes the procedure signatures, result columns, form field names and limits
+   (examples: `web/src/lib/moderation/types.ts`, `web/src/lib/chat/types.ts`). Database and web agents then build in
+   parallel against it without guessing.
+3. **Dispatch at most three workers at a time**, each with a self-contained brief: what to read first (this file's
+   sections, the contract, the pattern files), the exact files it owns, the files it must not touch, how to run and
+   verify, the rules below, and what to report. Two agents never edit the same file at once; when two pieces must meet
+   in a shared page, have one build a component and wire it in yourself.
+4. **Art gets its own agent.** Sprites go to a dedicated sprite agent (the pipeline in section 13). Render previews at
+   8x from the JSON, look at them, and send weak ones back.
+5. **Review before merging.** After the builders finish, run independent reviewers: `ecc:database-reviewer` on new SQL
+   and `ecc:security-reviewer` on new web code (OAuth, redirects, server actions, route handlers). Send the confirmed
+   findings back to a fix agent. Every security finding so far was real (an open redirect, message-id probing, a
+   chat deadlock).
+6. **Verify it yourself, don't trust the reports.** Reload with `--tests` (all PASS), `bun run check:chat`,
+   `bun run check:db` (Mac), `bun run typecheck`, `bun run lint`, `bun test`, `bun run build`, then click through the
+   change in a browser as a player, a moderator and an admin, at desktop and 375 px.
+7. **Docs agent last.** `ecc:doc-updater` syncs README, DEMO and this file with counts recounted from the SQL files.
+8. **Milestone.** Report what was built, what was verified, and what was not, then commit in logical commits,
+   fast-forward `main` and push only after the owner says so.
+
+### Which ECC agent for what
+
+| Job | Agent type |
+|---|---|
+| SQL procedures, grants and tests (test-first) | `ecc:tdd-guide` |
+| Web screens, server actions, sprites, fixes | `ecc:gan-generator` |
+| Review new SQL | `ecc:database-reviewer` |
+| Review new web code for security | `ecc:security-reviewer` |
+| React/TS review if needed | `ecc:react-reviewer`, `ecc:typescript-reviewer` |
+| README, DEMO and this file | `ecc:doc-updater` |
+| Build or type errors | `ecc:build-error-resolver` |
+| Read a web page (for example Discord's OAuth docs) | the `web-fetch` agent |
+
+Prefer Sonnet for the workers; keep the orchestrator on the strongest model for briefs and review.
+
+### Rules every agent brief repeats
+
+- Never commit, push or switch branches (only the orchestrator does, after the owner's OK).
+- Never write a password, key, token or credentialed URI into any file, log or chat. Secrets come from the macOS
+  Keychain or environment variables only, passed by name, never on a command line.
+- bun in `web/`, never npm; `vector/` stays on npm.
+- New tables in new numbered files, never alter an existing table without the owner's OK (see 3b item 2). Editing a
+  routine or a grant is fine.
+- Every app write is a DEFINER procedure with tests in `06_constraint_tests.sql`; reads go through `readCtx`, writes
+  through `runAsViewer`.
+- No pixel fonts. Sprites are original. No angle-bracket placeholders in shell commands (zsh reads `<` as a
+  redirect).
+- **GateGuard:** ECC's GateGuard hook may stop an agent's first Bash call or first edit of a file and ask it to state
+  facts (the request, who imports the file, what changes). That is expected: the agent answers briefly and retries.
+- A DB reload re-creates the MySQL roles and detaches the web logins. Re-attach them afterwards (`GRANT role TO login`
+  plus `SET DEFAULT ROLE`, as root), or pass every login flag to `setup.sh` again.
