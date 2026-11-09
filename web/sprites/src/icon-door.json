@@ -1,0 +1,31 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "O": "#5e3b27",
+  "H": "#bd8458",
+  "o": "#8a5a3c",
+  "Y": "#c99a3a",
+  "y": "#f2c35b",
+  "e": "#f2a65a"
+ },
+ "rows": [
+  "................",
+  "..kkkkkkkkkkkk..",
+  "..kOOOOOOOOOOk..",
+  "..kOHHkyyyyyOk..",
+  "..kOHHkyyyyyOk..",
+  "..kOHHkyyyyyOk..",
+  "..kOHHkyyyyyOk..",
+  "..kOHHkyyyyyOk..",
+  "..kOHYkyyyyyOk..",
+  "..kOHHkeeeeeOk..",
+  "..kOHHkeeeeeOk..",
+  "..kOHHkeeeeeOk..",
+  "..kOHHkeeeeeOk..",
+  "..kOOOOOOOOOOk..",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "open wooden door showing warm light inside"
+}

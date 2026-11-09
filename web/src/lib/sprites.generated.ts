@@ -46,6 +46,16 @@ export const SPRITES = {
   "tile-wood": { size: 16 },
   "deco-star": { size: 16 },
   "deco-moon": { size: 16 },
+  "logo-title-32": { size: 32 },
+  "icon-press-start": { size: 16 },
+  "icon-discord": { size: 16 },
+  "icon-mail": { size: 16 },
+  "icon-key": { size: 16 },
+  "icon-door": { size: 16 },
+  "icon-door-closed": { size: 16 },
+  "icon-eye": { size: 16 },
+  "icon-eye-off": { size: 16 },
+  "icon-warning": { size: 16 },
 } as const;
 
 export type BuiltSpriteName = keyof typeof SPRITES;

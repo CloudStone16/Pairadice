@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "y": "#f2c35b",
+  "w": "#fffaf0",
+  "e": "#f2a65a"
+ },
+ "rows": [
+  "................",
+  "................",
+  ".kk........kkkk.",
+  ".kyk.......keek.",
+  ".kyyk......keek.",
+  ".kyyyk.....keek.",
+  ".kywyyk....keek.",
+  ".kyyyyyk...keek.",
+  ".kyyyyyk...keek.",
+  ".kyyyyk....keek.",
+  ".kyyyk.....keek.",
+  ".kyyk......keek.",
+  ".kyk.......keek.",
+  ".kk........kkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "right-pointing arrow beside a blinking text cursor bar"
+}

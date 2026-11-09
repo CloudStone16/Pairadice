@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "c": "#f3ead3",
+  "w": "#fffaf0",
+  "A": "#dccaa3"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  ".kkwwwwwwwwwwkk.",
+  ".kckwwwwwwwwkck.",
+  ".kcckwwwwwwkcck.",
+  ".kccckwwwwkccck.",
+  ".kcccckwwkcccck.",
+  ".kccccckkccccck.",
+  ".kcccccccccccck.",
+  ".kcccccccccccck.",
+  ".kAAAAAAAAAAAAk.",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "sealed envelope with V flap"
+}
