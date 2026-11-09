@@ -65,7 +65,8 @@ export async function similarSessions(userId, { gameId, k = 5 } = {}) {
 
 /**
  * Phase B: SQL decides eligibility and the rule score (sp_recommend_sessions), MongoDB reranks the
- * eligible sessions by interest similarity. final = w * vector + (1 - w) * rule. Optionally logged
+ * eligible sessions by interest similarity. final = w * vectorNorm + (1 - w) * rule
+ * (vector similarities min-max normalised over the candidates). Optionally logged
  * to match_recommendation with source = 'hybrid'.
  */
 export async function hybridSessions(userId, { k = 5, candidates = 50, log = false } = {}) {
@@ -77,14 +78,24 @@ export async function hybridSessions(userId, { k = 5, candidates = 50, log = fal
   const sims = new Map((await nearest('sessions', await playerVector(userId),
     { filter: { _id: { $in: ids } }, k: ids.length })).map((d) => [d._id, d.score]));
 
+  // Cosines of same-kind texts cluster in a narrow band, so min-max normalise across the candidate set.
+  // Candidates with no embedding get 0.5 on the normalised scale; one candidate (or max == min) -> 0.5.
+  const raws = [...sims.values()];
+  const lo = Math.min(...raws);
+  const hi = Math.max(...raws);
+  const normalise = (s) => (raws.length < 2 || hi === lo ? 0.5 : (s - lo) / (hi - lo));
+
   const w = config.vectorWeight;
   const ranked = rule.map((r) => {
-    const vector = sims.get(Number(r.session_id)) ?? 0.5;          // not embedded yet: neutral
+    const raw = sims.get(Number(r.session_id));                    // undefined: not embedded yet
+    const vectorNorm = raw === undefined ? 0.5 : normalise(raw);
     const ruleScore = Number(r.score);
     return {
       session_id: Number(r.session_id), title: r.title, game: r.game,
-      rule: ruleScore, vector: Number(vector.toFixed(4)),
-      score: Number((w * vector + (1 - w) * ruleScore).toFixed(4)),
+      rule: ruleScore,
+      vector_raw: raw === undefined ? null : Number(raw.toFixed(4)),
+      vector: Number(vectorNorm.toFixed(4)),
+      score: Number((w * vectorNorm + (1 - w) * ruleScore).toFixed(4)),
     };
   }).sort((a, b) => b.score - a.score).slice(0, k);
 
@@ -92,7 +103,7 @@ export async function hybridSessions(userId, { k = 5, candidates = 50, log = fal
     await db.query(
       'INSERT INTO match_recommendation (user_id, session_id, score, score_breakdown, source) VALUES ?',
       [ranked.map((r) => [userId, r.session_id, r.score,
-        JSON.stringify({ rule: r.rule, vector: r.vector, vector_weight: w }), 'hybrid'])]);
+        JSON.stringify({ rule: r.rule, vector: r.vector, vector_raw: r.vector_raw, vector_weight: w }), 'hybrid'])]);
   }
   return ranked;
 }
