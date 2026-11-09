@@ -128,6 +128,20 @@ export const SPRITE_NAMES = [
   "rank-platinum",
   "rank-diamond",
   "rank-champion",
+  // Phase 5 (chat and badges)
+  "icon-send",
+  "icon-emoji",
+  "emote-gg",
+  "emote-wave",
+  "emote-laugh",
+  "emote-cheer",
+  "emote-sad",
+  "emote-heart",
+  "emote-fire",
+  "emote-gg-wp",
+  "badge-veteran",
+  "badge-great-teammate",
+  "badge-mentor",
 ] as const;
 
 export type SpriteName = (typeof SPRITE_NAMES)[number];

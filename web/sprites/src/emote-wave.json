@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "y": "#f2c35b",
+  "s": "#c99a3a",
+  "e": "#f2a65a"
+ },
+ "rows": [
+  "................",
+  "e...............",
+  ".e..kkkk........",
+  "....kyykk.kk....",
+  "..e.kyykyykyk.e.",
+  "....kyykyykyk.e.",
+  "..kk.kyykyykyk..",
+  ".kyykkyyyyykyk..",
+  ".kyykyyyyyyyyk..",
+  "..kyyyyyyyyyyk..",
+  "..kyyyyyyyyyk...",
+  "...kyyyyyyyysk..",
+  "...kyyyyyyyssk..",
+  "....kyyyyyssk...",
+  ".....kkssskk....",
+  "......kkkk......"
+ ],
+ "notes": "waving hand"
+}

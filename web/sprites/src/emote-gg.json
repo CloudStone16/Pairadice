@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "p": "#352c52",
+  "b": "#c99a3a"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  "kppppppppppppppk",
+  "kppbbbpppbbbpppk",
+  "kpbpppbpbpppbppk",
+  "kpbpppppbppppppk",
+  "kpbpbbbpbpbbbppk",
+  "kpbpppbpbpppbppk",
+  "kpbpppbpbpppbppk",
+  "kppbbbpppbbbpppk",
+  "kppppppppppppppk",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "GG brass tag"
+}

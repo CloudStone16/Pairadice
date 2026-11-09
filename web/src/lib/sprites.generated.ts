@@ -120,6 +120,19 @@ export const SPRITES = {
   "rank-platinum": { size: 16 },
   "rank-diamond": { size: 16 },
   "rank-champion": { size: 16 },
+  "icon-send": { size: 16 },
+  "icon-emoji": { size: 16 },
+  "emote-gg": { size: 16 },
+  "emote-wave": { size: 16 },
+  "emote-laugh": { size: 16 },
+  "emote-cheer": { size: 16 },
+  "emote-sad": { size: 16 },
+  "emote-heart": { size: 16 },
+  "emote-fire": { size: 16 },
+  "emote-gg-wp": { size: 16 },
+  "badge-veteran": { size: 32 },
+  "badge-great-teammate": { size: 32 },
+  "badge-mentor": { size: 32 },
 } as const;
 
 export type BuiltSpriteName = keyof typeof SPRITES;

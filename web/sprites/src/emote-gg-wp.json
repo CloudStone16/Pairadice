@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "p": "#352c52",
+  "b": "#c99a3a",
+  "c": "#f3ead3"
+ },
+ "rows": [
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  "kppppppppppppppk",
+  "kpppbbbppbbbpppk",
+  "kpppbppppbpppppk",
+  "kpppbpbppbpbpppk",
+  "kpppbpbppbpbpppk",
+  "kpppbbbppbbbpppk",
+  "kppppppppppppppk",
+  "kppcpppcpcccpppk",
+  "kppcpppcpcpcpppk",
+  "kppcpcpcpcccpppk",
+  "kppcpcpcpcpppppk",
+  "kpppcpcppcpppppk",
+  ".kkkkkkkkkkkkkk.",
+  "................"
+ ],
+ "notes": "GG over WP tag"
+}

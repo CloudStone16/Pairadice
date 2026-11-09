@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "y": "#f2c35b",
+  "s": "#c99a3a",
+  "w": "#fffaf0",
+  "b": "#6a95e6",
+  "r": "#e8665f"
+ },
+ "rows": [
+  "................",
+  ".....kkkkkk.....",
+  "...kkyyyyyykk...",
+  "..kyyyyyyyyyyk..",
+  ".kyyyyyyyyyyyyk.",
+  ".kyykkyyyykkyyk.",
+  ".kykyykyykyykyk.",
+  ".kbyyyyyyyyyybk.",
+  ".kykkkkkkkkkkyk.",
+  ".kyykwwwwwwkyyk.",
+  ".kyyykrrrrkyyyk.",
+  "..kyykkkkkkyyk..",
+  "..kyyyyyyyyyss..",
+  "...kkyyyyyskk...",
+  ".....kkkkkk.....",
+  "................"
+ ],
+ "notes": "laughing face"
+}
