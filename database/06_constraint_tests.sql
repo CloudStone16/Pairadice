@@ -85,6 +85,10 @@ ROLLBACK;
 -- ROLLBACK. Each one is rejected before it writes anything.
 CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
 CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
+CALL t_expect_error('PROC: sign-up with a bad username',  "CALL sp_register_user('no spaces', 'X', 'UTC', 'new@example.com', '$argon2id$v=19$probe', @t_uid)");
+CALL t_expect_error('PROC: sign-up with a taken username', "CALL sp_register_user('aarav_plays', 'X', 'UTC', 'new@example.com', '$argon2id$v=19$probe', @t_uid)");
+CALL t_expect_error('PROC: sign-up with a used email',    "CALL sp_register_user('brand_new', 'X', 'UTC', ' Aarav@Example.com ', '$argon2id$v=19$probe', @t_uid)");
+CALL t_expect_error('PROC: sign-up with a bad email',     "CALL sp_register_user('brand_new', 'X', 'UTC', 'not-an-email', '$argon2id$v=19$probe', @t_uid)");
 
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;

@@ -3,8 +3,8 @@ SET NAMES utf8mb4;
 -- Mirrors the in-app role / permission tables: player < moderator < admin.
 -- Roles are server-wide objects, so they are dropped and recreated for a clean re-run.
 
-DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro';
-CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro';
+DROP ROLE IF EXISTS 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro', 'pairadice_auth';
+CREATE ROLE 'pairadice_player', 'pairadice_moderator', 'pairadice_admin', 'pairadice_vec_worker', 'pairadice_web_ro', 'pairadice_auth';
 
 -- ---------------------------------------------------------------- player
 -- read the catalogue and public views (views run as DEFINER, so no base-table access is needed)
@@ -105,6 +105,18 @@ GRANT SELECT ON pairadice.v_open_sessions  TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.v_session_roster TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.v_player_card    TO 'pairadice_web_ro';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_web_ro';
+
+-- ---------------------------------------------------------------- auth (sign-up / sign-in / sign-out)
+-- The only role that touches login secrets. Sign-up goes through sp_register_user (08_auth.sql), so this
+-- role has no INSERT on users or user_role and cannot grant itself moderator or admin. It reads only what
+-- a session lookup needs: no bios, sessions, messages or audit rows.
+GRANT EXECUTE ON PROCEDURE pairadice.sp_register_user TO 'pairadice_auth';
+GRANT SELECT ON pairadice.auth_account TO 'pairadice_auth';
+GRANT SELECT, INSERT ON pairadice.auth_token TO 'pairadice_auth';
+GRANT UPDATE (revoked_at) ON pairadice.auth_token TO 'pairadice_auth';
+GRANT SELECT (user_id, username, display_name, status) ON pairadice.users TO 'pairadice_auth';
+GRANT SELECT ON pairadice.user_role TO 'pairadice_auth';
+GRANT SELECT ON pairadice.role      TO 'pairadice_auth';
 
 -- Example login accounts (choose your own passwords; never commit them):
 --   CREATE USER 'pd_api'@'localhost' IDENTIFIED BY '<password>';
