@@ -13,24 +13,24 @@ clean database.
 
 ```bash
 cd Pairadice
-ADMIN=<your MySQL admin login>          # e.g. root, or your auth_socket admin login
+ADMIN=root                              # or your own auth_socket admin login
 SOCK=/var/run/mysqld/mysqld.sock
 
 ./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 336/336 passed
-./vector/setup.sh                                                               # needs Docker running
+./vector/setup.sh                                                               # needs Docker running and the three Mongo passwords (see the README)
 ```
 
 If your MySQL has no `auth_socket` plugin, create password logins instead and keep their passwords in the macOS
-Keychain (account `pairadice`, service `pairadice/<key>`, keys `pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin`,
-`auth_secret`). Export `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_APP_PWD`, `PD_MOD_PWD` and `PD_ADMIN_PWD` from the Keychain
-with `security find-generic-password -a pairadice -s pairadice/<key> -w`, or leave them unset for hidden prompts:
+Keychain (account `pairadice`, services `pairadice/pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin` and
+`pairadice/auth_secret`). Export `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_APP_PWD`, `PD_MOD_PWD` and `PD_ADMIN_PWD` from the Keychain
+with `security find-generic-password -a pairadice -s pairadice/pd_web -w` (and the same for the others), or leave them unset for hidden prompts:
 
 ```bash
 ./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --web-user pd_web --auth-user pd_auth \
     --app-user pd_api --mod-user pd_mod --admin-user pd_admin
 ```
 
-Terminal B then starts with `bun run dev:kc` (it loads the logins from the Keychain). With password logins, use
+Terminal B then starts with `PAIRADICE_DEV_AUTH=1 bun run dev:kc` (it loads the logins from the Keychain). With password logins, use
 `pd -u pd_api -p` style commands in the RBAC step below, which prompt for the password.
 
 Open three terminals:
@@ -44,7 +44,7 @@ Open three terminals:
 Helpers for terminal C:
 
 ```bash
-pd() { mysql -S "$SOCK" -t pairadice "$@"; }       # pd -u <login> -e "..."
+pd() { mysql -S "$SOCK" -t pairadice "$@"; }       # usage: pd -u pd_player_sock -e "SELECT 1"
 q()  { awk -v a="^-- Q$1 " -v b="^-- Q$(( $1 + 1 )) " '$0~a{p=1} $0~b{p=0} p' database/05_sample_queries.sql; }
 ```
 
@@ -289,7 +289,7 @@ delete steps and prints each one.
    `identify` scope. Do not type or show any credentials or keys. Say: "State and a PKCE challenge go out, the callback
    checks them, and `sp_discord_login` finds the account by Discord id only, never by email, so a Discord profile
    cannot take over an email account. No token is stored." If it is switched off the button is disabled, and that is
-   fine to show. The real end-to-end login was verified live on 2026-11-11.
+   fine to show. The real end-to-end login was verified live on 2026-11-10.
 
 Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is time.
 

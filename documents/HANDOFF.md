@@ -1,12 +1,12 @@
-# PairADice: handoff for Arjun
+# PairADice: maintainer's guide and handoff for Arjun
 
-Last updated: 2026-11-11. Phases 5 and 6, MongoDB authentication and Discord sign-in are built, merged to `main` and verified live (Discord: verified live on 2026-11-11 (consent, callback, a new player created, session started, PKCE accepted by Discord)). Phase 7 polish is what remains.
-This file is meant to be the only document you need to finish
-the project. It is tracked in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
+Last updated: 2026-11-10. All phases (0 to 7) are complete and merged: the schema, vector store, auth, quests, social,
+profiles, moderation, chat, DMs and reviews, MongoDB authentication, Discord sign-in and the final polish. What remains is
+a short list of optional extras (section 3). The Phase 7 summary is in section 12.
+This file is now the maintainer's guide: where things are, how to run them, the conventions and the traps. It is tracked
+in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
 
-You wrote the root README and `documents/DEMO.md` and pushed about 48 commits, so this skips the basics and spends
-its words on what is left: specs for the remaining work, the exact conventions the code follows, and the traps
-that have already cost time.
+You wrote the root README and `documents/DEMO.md` and pushed about 48 commits, so this skips the basics.
 
 Rules for this file: it never contains a password, key or token, only the names of environment variables and
 Keychain items. Keep it that way if you edit it.
@@ -15,7 +15,7 @@ Keychain items. Keep it that way if you edit it.
 
 1. [State of the project](#1-state-of-the-project)
 2. [Rubric map](#2-rubric-map)
-3. [Recommended order, effort and what to cut](#3-recommended-order-effort-and-what-to-cut)
+3. [What to do next if you continue](#3-what-to-do-next-if-you-continue)
 4. [Environment and running](#4-environment-and-running)
 5. [Seed users and test accounts](#5-seed-users-and-test-accounts)
 6. [File map](#6-file-map)
@@ -24,7 +24,7 @@ Keychain items. Keep it that way if you edit it.
 9. [Phase 5: Camp chat, DMs and reviews (done)](#9-phase-5-camp-chat-dms-and-reviews-done)
 10. [MongoDB authentication (done)](#10-mongodb-authentication-done)
 11. [Discord OAuth sign-in (done)](#11-discord-oauth-sign-in-done)
-12. [Phase 7: Polish](#12-phase-7-polish)
+12. [Phase 7: Polish (summary)](#12-phase-7-polish-summary)
 13. [Sprites needed per phase](#13-sprites-needed-per-phase)
 14. [Definition of done](#14-definition-of-done)
 15. [First hour checklist](#15-first-hour-checklist)
@@ -38,7 +38,7 @@ PairADice is an LFG (looking-for-group) board for video games, a PES University 
 Learning Level 3, Aug to Dec 2026, 50 marks). The database design is what is graded; the web app shows it working.
 Repo: `CloudStone16/Pairadice`, branch `main`.
 
-Phases 0 to 4, profile editing, Phase 6 (moderation) and Phase 5 (chat, DMs, reviews) are done. From `git log`, in the order they landed:
+Everything is built and merged to `main`: Phases 0 to 7, profile editing, MongoDB authentication and Discord sign-in. From `git log`, in the order the early work landed:
 
 | Area | Commits (newest last in each row) |
 |---|---|
@@ -53,9 +53,10 @@ Phases 0 to 4, profile editing, Phase 6 (moderation) and Phase 5 (chat, DMs, rev
 | Profile editing | `fdc9b97` procedures, `894396a` actions and loader, `f493469` editor UI |
 | Docs | `741007f` README, `c581614` DEMO, `e6ba1ac` sync, `83f46be` handoff |
 | Phase 6 moderation | `38bcbc7` procedures, `36aaf2b` icons, `439bdcb` web, `cba9043` docs: `12_moderation.sql`, RBAC and routine changes, `/mod`, `/admin/users`, `/report` |
-| Phase 5 chat | branch `phase-5-chat` (uncommitted at the time of writing): `13_chat.sql`, RBAC changes, `check-chat-reads.ts`, chat, DM and review screens, 13 sprites |
+| Phase 5 chat | `13_chat.sql`, RBAC changes, `check-chat-reads.ts`, chat, DM and review screens, 13 sprites |
+| Later | MongoDB authentication (`15c1d16`), `14_discord.sql` and Discord sign-in (`7c8982f`, `6415bb0`), then Phase 7 polish on `phase-7-polish` |
 
-Counts, taken from the SQL files on 2026-11-11 (the 336 check total is from a `--tests` run):
+Counts, taken from the SQL files on 2026-11-10 (the 336 check total is from a `--tests` run):
 
 | Object | Count |
 |---|---|
@@ -68,7 +69,7 @@ Counts, taken from the SQL files on 2026-11-11 (the 336 check total is from a `-
 | DB checks | 336 in `06_constraint_tests.sql` (263 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 73 behaviour rows) |
 | Chat read checks | 46 in `web/scripts/check-chat-reads.ts` (`bun run check:chat`; needs `MYSQL_PWD` in the environment) |
 | Web unit tests | 149 across 16 files, all passing (`bun test`) |
-| Sprites | 133 JSON sources in `web/sprites/src/` (Phase 5 added `icon-send`, `icon-emoji`, 8 emotes and 3 badge medals) |
+| Sprites | 136 JSON sources in `web/sprites/src/` (Phase 5 added `icon-send`, `icon-emoji`, 8 emotes and 3 badge medals; Phase 7 added the cat poses `mascot-cat-wave`, `mascot-cat-sleep`, `mascot-cat-sad`) |
 
 What works today: schema, routines and RBAC; MongoDB vector store with outbox sync and hybrid ranking; email sign-in
 with a different MySQL login per role; hosting, joining and managing quests; friends and blocks; profile editing at
@@ -78,12 +79,10 @@ at `/mod` (overview, `/mod/reports`, `/mod/reports/[id]`, `/mod/sanctions`, `/mo
 
 MongoDB now requires authentication (section 10): `pdApi` for the web app, `pdWorker` for the worker, backfill and `demo-rud.js`.
 
-What does not exist yet: a polish pass (section 12), unread counts, websockets, a dedicated MySQL login for the worker (section 10), the two `message` indexes (section 9) and linking Discord to an existing email account.
+What does not exist: unread counts, websockets, a dedicated MySQL login for the worker (section 10), the two `message` indexes (section 9), linking Discord to an existing email account, and sound and motion toggles.
 
-A mascot change is in flight (separate agent, not you): the site mascot moves from the lavender `dice-32` die to
-`mascot-cat`, a white maneki-neko cat with a die standing on its corner (32 px sprite `mascot-cat`), and the favicon
-is generated from it by `bun run sprites`. The Discord application icon is `brand/discord-icon.png`. If `git status`
-shows `brand/` as untracked, ask the orchestrator before committing it.
+The site mascot is `mascot-cat`, a white maneki-neko cat with a die standing on its corner (32 px sprite). The favicon is
+generated from it by `bun run sprites`. The Discord application icon is `brand/discord-icon.png`.
 
 ## 2. Rubric map
 
@@ -95,35 +94,35 @@ Source of truth is `documents/DBMS Level 3.pdf`. This reuses the README's map an
 | Relational schema, keys, constraints | 3 | Done | `01_schema.sql`; drawio page 9 | Any new table needs adding to the generator |
 | SQL DDL with constraints | 4 | Done | `01_schema.sql`; 336 checks in `06` | Keep the check count in README and DEMO in sync |
 | NoSQL / vector DB creation | 4 | Done | `vector/src/schema.js`, `vector/scripts/init-db.js` | Mongo users `pdApi` and `pdWorker` are bound to the roles (section 10) |
-| Technology justification | 1 | Done | README, "Technology justification" (verified present, 3 subsections plus a table) | Re-read at the end |
+| Technology justification | 1 | Done | README, "Technology justification" (MySQL, MongoDB with auth, Next.js, plus a table incl. OAuth) | None |
 | DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 13; the player has no direct DML | None |
 | Nested / correlated / recursive, joins | 4 | Done | `05_sample_queries.sql` Q1 to Q18 | None |
 | Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `14` | None |
 | NoSQL / vector feature with RUD | 7 | Done | `/admin/vector`, `vector/scripts/demo-rud.js`, hybrid Hearth | Vector Lab verified working through Mongo auth (section 10) |
-| Next.js UI | 3 | Mostly done | `web/`; chat, DMs and reviews are covered | Phase 7 polish |
+| Next.js UI | 3 | Done | `web/`; chat, DMs, reviews and polish are covered | None |
 | Backend / API + DB integration | 2 | Done | server actions, per-role pools, `web/src/lib/mutations/` | None |
 | Authentication, 2+ roles, RBAC in the DB | 4 | Done | `04_rbac.sql`, `08_auth.sql`, `12_moderation.sql`, `13_chat.sql`, `requireRole`, per-role logins | Phase 6 made the moderator role visible in the app (`/mod`); a moderator gets 404 on `/admin/users` |
-| Documentation and Git/GitHub | 2 | Done | README, DEMO, this file, history | Final sync (section 12) |
+| Documentation and Git/GitHub | 2 | Done | README, `web/README.md`, DEMO, this file, history | Keep counts in sync |
 | Originality, individual contribution, viva | 4 | Depends on you | `documents/DEMO.md` | Rehearse; keep the app explainable |
 
-## 3. Recommended order, effort and what to cut
+## 3. What to do next if you continue
 
-Efforts are rough working days for one person who already knows the repo.
+Nothing here is needed for the project to be complete. In rough order of value:
 
-| Order | Work | Effort | Why here |
-|---:|---|---|---|
-| done | Phase 6 Moderation (section 8) | | Built and tested on `phase-6-moderation` |
-| done | Phase 5 chat, DMs and reviews (section 9) | | Built and tested on `phase-5-chat`; closed the last direct player grants |
-| done | MongoDB authentication (section 10) | | Built on `mongo-auth` and verified live on 2026-11-11 |
-| done | Discord OAuth (section 11) | | Verified live on 2026-11-11 |
-| 1 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
+1. **Worker MySQL login.** Create it with `database/setup.sh --worker-user NAME`, check the grants of
+   `pairadice_vec_worker` against what the worker reads and updates (section 10), run the worker with it, then drop the
+   gap from the README.
+2. **Message indexes.** `message(sender_id, sent_at)` and `message(session_id, message_id)` speed up the chat rate limit
+   and history. They alter an existing table, so they need the owner's OK first.
+3. **Unread counts.** Needs a new read-tracking table (for example `message_read`), added in a new numbered file and to
+   the ER generator.
+4. **Websockets** instead of the 4-second polling of `/api/chat/[sessionId]` and `/api/dm/[userId]`.
+5. **Link Discord to an existing email account** from a settings screen (a `sp_link_discord` procedure). Never link
+   automatically by email or username: that is an account takeover path.
+6. **Sound and motion toggles** (sprites `icon-sound-on`, `icon-sound-off`, `icon-motion-on`, `icon-motion-off`).
+7. Admin game-catalogue management.
 
-If time runs short, cut in this order (first item is cut first):
-
-1. Phase 7 extras: sound and motion toggles, extra mascot poses, new decorations.
-2. Admin game-catalogue management.
-
-Never cut: the tests for whatever you build; the README and DEMO sync; a full rehearsal.
+Never skip, whatever you build: tests for it, the README and DEMO sync, and a full rehearsal of the DEMO.
 
 ## 4. Environment and running
 
@@ -356,7 +355,7 @@ docs/                     GITIGNORED local context; do not rely on it
 ```
 
 Gitignored and therefore not on GitHub: `docs/`, `database/README.md`, `web/AGENTS.md`, `.claude/`, `docs.zip`.
-`web/README.md` is tracked but is stale (section 16).
+`web/README.md` is tracked and current.
 
 ## 7. Conventions and gotchas
 
@@ -517,7 +516,7 @@ existing tables; it needs the owner's OK.
 
 ## 10. MongoDB authentication (done)
 
-Built on branch `mongo-auth` and verified live on 2026-11-11. MongoDB now requires a login. Users in the database
+Built on branch `mongo-auth` and verified live on 2026-11-10. MongoDB now requires a login. Users in the database
 `pairadice_vec`: `pdApi` (role `pdVecReader`: find, listIndexes, listSearchIndexes) for the web app; `pdWorker` (role
 `pdVecWriter`) for the worker, the backfill and `demo-rud.js` (it writes through the outbox drain, so it needs
 `pdWorker`). The root user `pdRoot` is used only by setup.
@@ -548,7 +547,7 @@ reads and updates (outbox, source tables, procedures), run the worker with it, a
 
 ## 11. Discord OAuth sign-in (done)
 
-Automated checks pass, and the real end-to-end login was verified live on 2026-11-11 (consent, callback, a new player created, session started, PKCE accepted by Discord).
+Automated checks pass, and the real end-to-end login was verified live on 2026-11-10 (consent, callback, a new player created, session started, PKCE accepted by Discord).
 
 - **Switch.** Off unless `PAIRADICE_DISCORD_LOGIN=1` and `DISCORD_CLIENT_ID` + `DISCORD_CLIENT_SECRET` are set;
   production also needs an `https:` `PAIRADICE_PUBLIC_URL`. Off: both routes return 404 and the button stays disabled.
@@ -573,34 +572,24 @@ Automated checks pass, and the real end-to-end login was verified live on 2026-1
 - **Tests:** `discord-core.test.ts` (state, PKCE, URLs, cookie, flag gating, username rules), 17 more DB checks in `06`.
   The seed's fake Discord ids never match a real login.
 
-## 12. Phase 7: Polish
+## 12. Phase 7: Polish (summary)
 
-Do this last, after the features, but start the accessibility checks early on each new screen.
+Phase 7 polish is done (2026-11-10):
 
-- **Empty, loading and error states.** Every new screen gets all three. Reuse `EmptyState`, `Skeletons` and the
-  `error.tsx` boundaries. Avoid a `loading.tsx` above a page that can `notFound()`: it turns missing pages into
-  soft 404s, which is why earlier ones were removed. Skeletons exist only on Hearth; check client navigation on the
-  slower pages.
-- **Accessibility (WCAG 2.2 AA).** Earlier passes fixed forms, nav, camp and the Vector Lab (`a0d1273`). For the new
-  screens: labelled form controls, error text tied to inputs with `aria-describedby`, a visible focus ring,
-  keyboard-complete tables and dialogs, `aria-live` for polled chat and form results, targets at least 24 px,
-  status by shape or text as well as colour, contrast on parchment (never lilac), `prefers-reduced-motion`. Run an
-  automated pass plus a keyboard-only walkthrough.
-- **Mobile layout.** Check 320, 375, 768, 1024 and 1280 px. Watch the tables in `/mod` (make them stacked cards on a
-  narrow screen), the sticky HUD at 200% text zoom, the chat composer above the on-screen keyboard.
-- **Mascot and icon.** Confirm the cat appears in the HUD, title screen, empty and 404 states, and as the favicon
-  (generated into `src/app/icon.svg` by `bun run sprites`). Anywhere the old `dice-32` is still used should be
-  deliberate.
-- **README and DEMO final sync.** Counts (tables, procedures, functions, triggers, checks), file list and load order,
-  the status section, the new routes, and every command in DEMO re-run once end to end.
-- **Technology justification.** It already exists in the README ("Technology justification": MySQL, MongoDB,
-  Next.js, plus a "smaller choices" table), which covers the 1 mark. Re-read it against what you ship; Mongo auth already has its line (least-privilege users); if you add
-  Discord OAuth, add one for it.
-- **Final demo rehearsal.** Reload everything from scratch, run `documents/DEMO.md` against the clock (10 minutes),
-  and then run it again on a second machine or a clean checkout. Add chat steps if you built them (the moderation steps already exist),
-  and remove the "honest gaps" line for anything now done.
-- **Housekeeping.** `web/README.md` is stale (section 16). Check that nothing sensitive is in the tree
-  (`git grep -n -i -E "password|secret|token" -- ':!*.test.ts'` and read the hits, values are never present by design).
+- Accessibility pass (WCAG 2.2 AA, by code review) on the moderation, admin, report, chat, DM, review and sign-in
+  screens: heading order, 24 px targets, focus moved to the suspend/ban confirm button, the emote panel always in the
+  DOM so `aria-controls` resolves, the chat refresh note announced, audit labels as screen-reader text, no lilac on
+  parchment in the Discord button.
+- Mobile: no horizontal scroll at 375 px on any page for player, moderator or admin (checked in the browser).
+- States: rating the last teammate now shows "Thanks, your party is rated." (`?rated=1`); suspended or banned DM
+  partners show "Unavailable"; admin search has an empty state.
+- Mascot: `mascot-cat-wave` on the Hearth, `mascot-cat-sleep` as the default in `EmptyState`
+  (`mascot={false}` restores the per-screen icon), `mascot-cat-sad` on the error and 404 pages. `icon-hide-message`
+  and `icon-restore` redrawn.
+- Docs: `web/README.md` rewritten; README, DEMO and this file synced; a repository scan found no committed secrets.
+- Rehearsal: clean reload 336/336, `check:chat` 46/46, `check:db` all OK, the DEMO SQL steps run as written,
+  typecheck, lint, 149 unit tests and the build pass.
+- Cut on purpose: sound and motion toggles, extra decorations.
 
 ## 13. Sprites needed per phase
 
@@ -623,7 +612,7 @@ platform glyphs, and the avatars `avatar-01` to `avatar-12`.
 |---|---|---|
 | 5 (built) | `icon-send`, `icon-emoji`, emotes `emote-gg`, `emote-wave`, `emote-laugh`, `emote-cheer`, `emote-sad`, `emote-heart`, `emote-fire`, `emote-gg-wp`, and badge medals `badge-veteran`, `badge-great-teammate`, `badge-mentor` | chat composer, emote picker, character sheet badges; `icon-unread` was not needed because unread counts were cut |
 | 11 (Discord) | none (the existing `icon-discord` is an original glyph, not the Discord logo) | Discord button |
-| 7 | `icon-sound-on`, `icon-sound-off`, `icon-motion-on`, `icon-motion-off`; cat poses `mascot-cat-wave`, `mascot-cat-sleep`, `mascot-cat-sad` (32 px) for empty and error states; decorations `deco-cloud`, `deco-tree`, `deco-tent`, `deco-lantern`; optional `avatar-13` to `avatar-16` | polish; update the modulo in `Avatar.tsx` if you add avatars |
+| 7 (extras not built; see section 3) | `icon-sound-on`, `icon-sound-off`, `icon-motion-on`, `icon-motion-off`; cat poses `mascot-cat-wave`, `mascot-cat-sleep`, `mascot-cat-sad` (32 px) for empty and error states; decorations `deco-cloud`, `deco-tree`, `deco-tent`, `deco-lantern`; optional `avatar-13` to `avatar-16` | polish; update the modulo in `Avatar.tsx` if you add avatars |
 
 ## 14. Definition of done
 
@@ -658,7 +647,8 @@ A phase is done when every line holds.
   denied direct `INSERT` as `pd_mod`, then `sp_issue_sanction` and `sp_lift_sanction`. The RBAC step
   that ran `SELECT COUNT(*) FROM message` as the player is fixed in Phase 5: it now shows the denied direct read, then
   `CALL sp_chat_history(1, 3, NULL, 5)`. The MongoDB `mongosh` line is fixed for Mongo auth: it uses `process.env.PW`, so no password is on the command line.
-- This file: move the finished phase out of the "remaining" sections and update the counts.
+- `web/README.md`: routes, scripts and conventions.
+- This file: move the finished work out of the "next" list and update the counts.
 
 ## 15. First hour checklist
 
@@ -675,7 +665,7 @@ A phase is done when every line holds.
    `/camp/10`, `/camp/3` (chat), `/messages`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
 8. Run `bun run check:db` (Mac with Keychain) to see the five logins prove their limits.
 9. Skim `database/12_moderation.sql` (the newest procedure file, a good pattern to copy) and open `/mod` as user 9.
-10. Branch, then start with the next item in section 3 (Phase 7 polish; Discord OAuth is done), tests first.
+10. Branch, then pick an item from section 3, tests first.
 
 ## 16. Known stale docs and unverified items
 
@@ -684,9 +674,8 @@ Corrected or found stale while writing this:
 - The old `docs/handoff.md` (local, gitignored) described a project around Phases 1 and 2. It said no root README, no
   per-role pools, no Phase 4, 48 tests, 46 sprites, a Mongo container that fails to start, and logins "in progress";
   all of that is out of date. Do not use it.
-- The root README counts were corrected in Phase 5: 52 procedures, 9 functions, 55 triggers, 1 event, 336 checks (Discord sign-in added).
-- `web/README.md` is stale: it describes a read-only app with a "Sign-in arrives in Phase 2" gate, a single
-  `MYSQL_PWD` login, and Phase 1 routes only. It was outside this handoff's scope; refresh it in Phase 7.
+- The root README counts were recounted from the SQL files in Phase 7: 52 procedures, 9 functions, 55 triggers, 1 event, 336 checks (Discord sign-in added).
+- `web/README.md` was stale (read-only Phase 1 app) and was rewritten in Phase 7.
 - `bun run test` does not exist; the command is `bun test`.
 - Closed: the player's direct `SELECT`/`INSERT` on `message` and `INSERT` on `review` (Phase 5), the unscheduled
   `sp_expire_sanctions` (now `ev_expire_sanctions`) and the direct grants on `report`, `sanction` and message
@@ -694,13 +683,13 @@ Corrected or found stale while writing this:
 - Open: the two `message` indexes in section 9 need the owner's OK; unread counts and websockets are not built.
 - Seed users cannot sign in with a password (placeholder hashes). Only `/sign-up` accounts and the dev switch work.
 
-Verified on 2026-11-11: the Keychain items `pairadice/mongo_root`, `mongo_api` and `mongo_worker` exist and work, and MongoDB authentication works end to end (section 10).
+Verified on 2026-11-10: the Keychain items `pairadice/mongo_root`, `mongo_api` and `mongo_worker` exist and work, and MongoDB authentication works end to end (section 10).
 
-Verified on 2026-11-11 for Discord sign-in: the Keychain items `pairadice/discord_client_id` and `pairadice/discord_client_secret` are present; the authorize and token endpoints and the `identify` scope were checked against Discord's docs; automated checks pass (start route redirects with the right parameters and cookie, a callback without the cookie goes to `/sign-in?error=discord`, the sign-in page shows the enabled button, 336/336 DB checks, `check:db` probes: auth may run the procedure, player may not).
+Verified on 2026-11-10 for Discord sign-in: the Keychain items `pairadice/discord_client_id` and `pairadice/discord_client_secret` are present; the authorize and token endpoints and the `identify` scope were checked against Discord's docs; automated checks pass (start route redirects with the right parameters and cookie, a callback without the cookie goes to `/sign-in?error=discord`, the sign-in page shows the enabled button, 336/336 DB checks, `check:db` probes: auth may run the procedure, player may not).
 
-Not verified on 2026-11-11:
+Not verified on 2026-11-10:
 
 - The live MySQL state beyond the `--tests` run (336 of 336). Reload and rerun it first.
-- The real end-to-end Discord login (consent, callback, new account) was verified live on 2026-11-11.
+- The real end-to-end Discord login (consent, callback, new account) was verified live on 2026-11-10.
 - The grants of `pairadice_vec_worker` against what the worker actually needs (section 10); the MySQL login for it does not exist yet.
 - The viva date and any submission deadline are not recorded in the repo.
