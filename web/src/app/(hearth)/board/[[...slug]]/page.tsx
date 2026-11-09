@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/hearth/EmptyState";
 import { QuestGrid } from "@/components/hearth/QuestGrid";
 import { SignInGate } from "@/components/hearth/SignInGate";
-import { Chip, Sprite, Window } from "@/components/ui";
+import { ButtonLink, Chip, Sprite, Window } from "@/components/ui";
 import { cartSprite } from "@/lib/format";
 import { resolveGame, resolveMode } from "@/lib/slugs";
 import { OPEN_QUEST_LIMIT, getCurrentUser, getGames, getModes, getOpenQuests } from "@/lib/queries";
@@ -72,6 +72,10 @@ export default async function BoardPage({ params }: { params: Promise<Params> })
           <Chip tone="ember" className="shrink-0">
             {count} {quests.length === 1 ? "quest" : "quests"}
           </Chip>
+          <ButtonLink href="/camp/new" variant="green" className="shrink-0">
+            <Sprite name="icon-new-quest" />
+            Host a quest
+          </ButtonLink>
         </div>
         {game && gameModes.length > 0 ? (
           <nav aria-label={`${game.name} modes`} className="mt-4">
