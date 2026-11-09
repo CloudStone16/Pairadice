@@ -44,8 +44,10 @@ DELIMITER $$
 CREATE PROCEDURE sp_vec_enqueue(IN p_entity VARCHAR(16), IN p_id BIGINT UNSIGNED, IN p_op VARCHAR(16))
 MODIFIES SQL DATA
 BEGIN
-  INSERT INTO embedding_outbox (entity, entity_id, op) VALUES (p_entity, p_id, p_op) AS n
-  ON DUPLICATE KEY UPDATE op = n.op, enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+  -- UTC_TIMESTAMP, not CURRENT_TIMESTAMP: a writer whose session is not set to UTC (a plain mysql shell
+  -- on an IST machine) would otherwise stamp local time and the queue's ages would be off by hours.
+  INSERT INTO embedding_outbox (entity, entity_id, op, enqueued_at) VALUES (p_entity, p_id, p_op, UTC_TIMESTAMP(6)) AS n
+  ON DUPLICATE KEY UPDATE op = n.op, enqueued_at = UTC_TIMESTAMP(6), attempts = 0, last_error = NULL;
 END$$
 
 CREATE PROCEDURE sp_vec_enqueue_profile(IN p_profile_id BIGINT UNSIGNED)
