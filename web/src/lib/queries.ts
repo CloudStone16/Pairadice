@@ -194,7 +194,7 @@ export const getRecommendedQuests = cache(async (ref: ViewerRef): Promise<Quest[
     return await loadRecommendedQuests(ref);
   } catch (err) {
     // A failing procedure must never take the whole site down; the UI shows its empty state.
-    console.error("[pairadice] sp_recommend_sessions failed:", err);
+    console.error("[pairadice] sp_recommend_sessions failed:", err instanceof Error ? err.message.replace(/'[^']*'/g, "'?'").slice(0, 160) : "unknown");
     return [];
   }
 });

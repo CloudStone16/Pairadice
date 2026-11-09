@@ -34,11 +34,15 @@ export function FormAlert({
   message,
   items,
   focusKey,
+  headingLevel = 2,
 }: {
   message?: string;
   items?: FormAlertItem[];
   focusKey?: unknown;
+  /** Heading level of "There's a problem"; use the level that fits where the alert is nested. */
+  headingLevel?: 2 | 3 | 4;
 }) {
+  const Heading = `h${headingLevel}` as const;
   const headingId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const hasContent = Boolean(message) || (items?.length ?? 0) > 0;
@@ -51,10 +55,10 @@ export function FormAlert({
   const body = hasContent ? (
     <div className="rounded-frame border-2 border-[#8a2621] bg-[#fff1ec] p-3 text-[15px] text-[#6e1c18]">
       {focusable ? (
-        <h2 id={headingId} className="mb-1 flex items-center gap-2 font-display text-lg font-bold">
+        <Heading id={headingId} className="mb-1 flex items-center gap-2 font-display text-lg font-bold">
           <Sprite name="icon-warning" />
           There&apos;s a problem
-        </h2>
+        </Heading>
       ) : null}
       {message ? (
         <p className="flex items-start gap-2 font-semibold">

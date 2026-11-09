@@ -15,8 +15,20 @@ const GENERIC = "Something went wrong, please try again.";
 
 interface MysqlError {
   code?: string;
+  errno?: number;
   sqlState?: string;
   sqlMessage?: string;
+  message?: string;
+}
+
+/** An error description with no SQL text and no quoted values (those can hold user input). */
+export function redactedDbError(err: unknown): string {
+  const e = (err ?? {}) as MysqlError;
+  const msg = String(e.sqlMessage ?? e.message ?? "")
+    .replace(/'[^']*'/g, "'?'")
+    .replace(/\b(INSERT|UPDATE|DELETE|SELECT|CALL|REPLACE)\b[\s\S]*$/i, "[sql removed]")
+    .slice(0, 160);
+  return `code=${e.code ?? "?"} errno=${e.errno ?? "?"} sqlState=${e.sqlState ?? "?"} message=${msg}`;
 }
 
 /** A message safe to show the user, or null when the error is unexpected. */
@@ -58,7 +70,7 @@ export async function runAsViewer<T>(
     return { ok: true, value: await fn(login) };
   } catch (err) {
     const message = friendlyDbError(err);
-    if (message === null) console.error("[pairadice] write failed:", err);
+    if (message === null) console.error("[pairadice] write failed:", redactedDbError(err));
     return { ok: false, message: message ?? GENERIC };
   }
 }

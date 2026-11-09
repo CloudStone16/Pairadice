@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { TitleScreen } from "@/components/auth/TitleScreen";
 import { Window } from "@/components/ui";
+import { safeNextOrNull } from "@/lib/auth/safe-next";
 import { getViewer } from "@/lib/auth/viewer";
 
 export const metadata: Metadata = { title: "Sign in | PairADice" };
@@ -11,7 +12,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const viewer = await getViewer();
   if (viewer?.source === "session") redirect("/hearth");
   const { next } = await searchParams;
-  const nextPath = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
+  const nextPath = safeNextOrNull(typeof next === "string" ? next : null) ?? undefined;
   return (
     <TitleScreen tagline="Press start to enter the cabin">
       <Window title="Sign in" titleAs="p" variant="parchment" className="w-full">

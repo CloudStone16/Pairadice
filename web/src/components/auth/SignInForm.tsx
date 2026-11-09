@@ -44,7 +44,7 @@ export function SignInForm({ next }: { next?: string }) {
 
       <p className="text-center text-base text-ink">
         New to the cabin?{" "}
-        <Link href="/sign-up" className="font-bold underline underline-offset-4 hover:text-wood-dark">
+        <Link href={next ? `/sign-up?next=${encodeURIComponent(next)}` : "/sign-up"} className="font-bold underline underline-offset-4 hover:text-wood-dark">
           Create an account
         </Link>
       </p>

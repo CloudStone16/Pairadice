@@ -105,6 +105,23 @@ export const SPRITE_NAMES = [
   "icon-block",
   "icon-unblock",
   "icon-mail-incoming",
+  // Phase 3: profiles
+  "icon-plus",
+  "icon-check",
+  "icon-cross",
+  "icon-save",
+  "icon-dice-d6",
+  "icon-calendar",
+  "icon-platform-pc",
+  "icon-platform-playstation",
+  "icon-platform-xbox",
+  "icon-platform-switch",
+  "rank-bronze",
+  "rank-silver",
+  "rank-gold",
+  "rank-platinum",
+  "rank-diamond",
+  "rank-champion",
 ] as const;
 
 export type SpriteName = (typeof SPRITE_NAMES)[number];

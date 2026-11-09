@@ -98,6 +98,22 @@ export const SPRITES = {
   "icon-block": { size: 16 },
   "icon-unblock": { size: 16 },
   "icon-mail-incoming": { size: 16 },
+  "icon-plus": { size: 16 },
+  "icon-check": { size: 16 },
+  "icon-cross": { size: 16 },
+  "icon-save": { size: 16 },
+  "icon-dice-d6": { size: 16 },
+  "icon-calendar": { size: 16 },
+  "icon-platform-pc": { size: 16 },
+  "icon-platform-playstation": { size: 16 },
+  "icon-platform-xbox": { size: 16 },
+  "icon-platform-switch": { size: 16 },
+  "rank-bronze": { size: 16 },
+  "rank-silver": { size: 16 },
+  "rank-gold": { size: 16 },
+  "rank-platinum": { size: 16 },
+  "rank-diamond": { size: 16 },
+  "rank-champion": { size: 16 },
 } as const;
 
 export type BuiltSpriteName = keyof typeof SPRITES;

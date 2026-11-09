@@ -9,7 +9,7 @@ import { FormAlert, authErrorItems } from "./FormAlert";
 import { PasswordField } from "./PasswordField";
 import { TextField } from "./TextField";
 
-export function SignUpForm() {
+export function SignUpForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState(signUp, initialAuthState);
   const fe = state.fieldErrors;
   const [timezone, setTimezone] = useState("");
@@ -24,6 +24,7 @@ export function SignUpForm() {
   return (
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="timezone" value={timezone} />
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <FormAlert message={state.message} items={authErrorItems(fe)} focusKey={state} />
       <TextField
         id="username"
@@ -64,7 +65,7 @@ export function SignUpForm() {
       </PendingButton>
       <p className="text-center text-base text-ink">
         Already have a character?{" "}
-        <Link href="/sign-in" className="font-bold underline underline-offset-4 hover:text-wood-dark">
+        <Link href={next ? `/sign-in?next=${encodeURIComponent(next)}` : "/sign-in"} className="font-bold underline underline-offset-4 hover:text-wood-dark">
           Sign in
         </Link>
       </p>

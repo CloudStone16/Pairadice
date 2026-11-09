@@ -111,6 +111,7 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   const email = text(formData, "email").trim().toLowerCase();
   const password = text(formData, "password");
   const timezone = validTimezone(text(formData, "timezone").trim());
+  const next = safeNext(text(formData, "next"));
   const values = { email, username, displayName };
 
   // counted before any hashing: sign-up is the expensive path
@@ -155,7 +156,7 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
     console.error("[auth] could not start a session after sign-up:", describeError(err));
     return { status: "error", message: GENERIC_ERROR, values };
   }
-  redirect("/hearth");
+  redirect(next);
 }
 
 export async function signOut(): Promise<void> {

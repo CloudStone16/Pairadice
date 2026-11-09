@@ -36,3 +36,12 @@ describe("safeNext", () => {
     expect(safeNextOrNull("//x")).toBeNull();
   });
 });
+
+describe("sign-up next handling", () => {
+  test("keeps the editor path, drops hostile values", () => {
+    expect(safeNextOrNull("/character/edit")).toBe("/character/edit");
+    expect(safeNextOrNull("//evil.example")).toBeNull();
+    expect(safeNext("https://evil.example", DEFAULT_NEXT)).toBe(DEFAULT_NEXT);
+    expect(safeNext(undefined)).toBe("/hearth");
+  });
+});

@@ -1,14 +1,19 @@
 import { ButtonLink, Sprite, Window } from "@/components/ui";
+import { safeNextOrNull } from "@/lib/auth/safe-next";
+import { getViewerState } from "@/lib/auth/viewer";
 import { isDevAuthEnabled } from "@/lib/dev-user";
 
 /**
  * Shown instead of any hearth page when there is no identity. `next` is the
  * path to return to after signing in, when the caller knows it.
  */
-export function SignInGate({ next }: { next?: string }) {
+export async function SignInGate({ next }: { next?: string }) {
   const dev = process.env.NODE_ENV === "development";
-  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
-  const signInHref = safeNext ? `/sign-in?next=${encodeURIComponent(safeNext)}` : "/sign-in";
+  const { sessionExpired } = await getViewerState();
+  const safeNext = safeNextOrNull(next) ?? undefined;
+  const suffix = safeNext ? `?next=${encodeURIComponent(safeNext)}` : "";
+  const signInHref = `/sign-in${suffix}`;
+  const signUpHref = `/sign-up${suffix}`;
   return (
     <main id="main" className="mx-auto flex w-full max-w-xl flex-1 items-center px-4 py-16">
       <Window title="The cabin door is closed" titleAs="p" className="w-full">
@@ -26,12 +31,17 @@ export function SignInGate({ next }: { next?: string }) {
                 <Sprite name="icon-door" />
                 Sign in
               </ButtonLink>
-              <ButtonLink href="/sign-up" variant="ghost">
+              <ButtonLink href={signUpHref} variant="ghost">
                 <Sprite name="icon-star" />
                 Create account
               </ButtonLink>
             </div>
-            {dev ? (
+            {sessionExpired ? (
+              <p role="status" className="mt-4 rounded-frame bg-ink/40 p-3 text-sm">
+                Your session has expired. Please sign in again.
+              </p>
+            ) : null}
+            {dev && !sessionExpired ? (
               <p className="mt-4 rounded-frame bg-ink/40 p-3 text-sm">
                 {isDevAuthEnabled()
                   ? "Dev sign-in is on, but no player could be found. Load database/03_seed.sql first."
