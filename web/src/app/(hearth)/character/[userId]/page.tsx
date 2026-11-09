@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { MessageLink } from "@/components/chat/MessageLink";
+import { getCanMessage } from "@/lib/queries-chat";
 import { ReportLink } from "@/components/report/ReportLink";
 import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { RelationshipBar } from "@/components/social/RelationshipBar";
@@ -68,7 +70,7 @@ export default async function CharacterPage({
   let relationship = null;
   const viewer = me.user_id === id ? null : await getViewer();
   if (viewer) {
-    const rel = await getRelation(viewer, id);
+    const [rel, canMsg] = await Promise.all([getRelation(viewer, id), getCanMessage(viewer, id)]);
     relationship = (
       <>
         <RelationshipBar
@@ -77,6 +79,7 @@ export default async function CharacterPage({
           relation={rel.ok ? rel.value : "none"}
           error={rel.ok ? undefined : rel.message}
         />
+        {canMsg.can ? <MessageLink userId={id} name={card.display_name} /> : null}
         <ReportLink userId={id} name={card.display_name} back={`/character/${id}`} />
         <ReportedNotice show={isReported(reported)} />
       </>

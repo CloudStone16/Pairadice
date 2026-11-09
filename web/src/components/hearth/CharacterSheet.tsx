@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Avatar, ButtonLink, Chip, Meter, Sprite, Tooltip, Window } from "@/components/ui";
+import { Avatar, ButtonLink, Chip, Meter, Sprite, Window } from "@/components/ui";
+import { BadgeShelf } from "@/components/character/BadgeShelf";
 import { cartSprite } from "@/lib/format";
 import type { PlayerBadge, PlayerCard, PlayerGame, PlayerLanguage, Presence } from "@/lib/types";
 import { PresenceLabel } from "./PresenceLabel";
@@ -127,27 +128,7 @@ export function CharacterSheet({
             )}
           </Window>
           <Window title="Medals">
-            {badges.length === 0 ? (
-              <p className="text-sm text-lavender">No medals earned yet. Good company earns them.</p>
-            ) : (
-              <ul role="list" className="flex flex-wrap gap-2">
-                {badges.map((b) => (
-                  <li key={b.badge_id}>
-                    {b.description ? (
-                      <Tooltip content={b.description}>
-                        <Chip tone="yellow" icon={<Sprite name="icon-star" />}>
-                          {b.name}
-                        </Chip>
-                      </Tooltip>
-                    ) : (
-                      <Chip tone="yellow" icon={<Sprite name="icon-star" />}>
-                        {b.name}
-                      </Chip>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <BadgeShelf badges={badges} />
           </Window>
         </div>
       </div>

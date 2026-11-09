@@ -21,6 +21,7 @@ const TABS: Tab[] = [
   { href: "/board", label: "Quest Board", short: "Board", icon: "icon-board", within: "/camp" },
   { href: "/party", label: "My Party", short: "Party", icon: "icon-party" },
   { href: "/friends", label: "Friends", short: "Friends", icon: "icon-friends" },
+  { href: "/messages", label: "Messages", short: "Chat", icon: "icon-mail" },
   // other players' sheets live under /character/<id>; only your own is "current"
   { href: "/character", label: "Character", short: "Me", icon: "icon-character", exact: true },
 ];

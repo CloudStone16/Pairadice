@@ -4,6 +4,7 @@ import { PlayerRow } from "@/components/social/PlayerRow";
 import { SocialAction } from "@/components/social/SocialAction";
 import { SocialStatus } from "@/components/social/SocialStatus";
 import { Chip, Sprite, Window, Button } from "@/components/ui";
+import { MessageLink } from "@/components/chat/MessageLink";
 import { ReportLink } from "@/components/report/ReportLink";
 import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { FormAlert } from "@/components/auth/FormAlert";
@@ -74,6 +75,7 @@ export default async function FriendsPage({ searchParams }: { searchParams: Prom
           empty="No friends yet. Good company is on the Quest Board."
           action={(f) => (
             <>
+              <MessageLink userId={f.user_id} name={f.display_name} />
               <SocialAction kind="remove" userId={f.user_id} name={f.display_name} />
               <ReportLink userId={f.user_id} name={f.display_name} back="/friends" />
             </>

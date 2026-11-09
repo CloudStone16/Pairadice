@@ -53,6 +53,7 @@ describe("reportHref", () => {
   test("encodes back and session", () => {
     expect(reportHref(4, "/camp/9?x=1", 9)).toBe("/report/4?session=9&back=%2Fcamp%2F9%3Fx%3D1");
     expect(reportHref(4, "/character/4")).toBe("/report/4?back=%2Fcharacter%2F4");
+    expect(reportHref(4, "/messages/4", null, 12)).toBe("/report/4?back=%2Fmessages%2F4&message=12");
   });
 });
 

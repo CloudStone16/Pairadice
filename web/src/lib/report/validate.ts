@@ -77,10 +77,11 @@ export function withReportedFlag(path: string): string {
 }
 
 /** The /report/<id> link for an entry point. `back` is the current path (already without the status flag). */
-export function reportHref(userId: number, back: string, sessionId?: number | null): string {
+export function reportHref(userId: number, back: string, sessionId?: number | null, message?: number | null): string {
   const p = new URLSearchParams();
   if (sessionId) p.set("session", String(sessionId));
   p.set("back", back);
+  if (message) p.set("message", String(message));
   return `/report/${userId}?${p.toString()}`;
 }
 

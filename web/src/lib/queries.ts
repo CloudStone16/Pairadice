@@ -3,6 +3,7 @@ import { cache } from "react";
 import { callProcAs, query, queryAs, type SqlParam } from "@/lib/db";
 import type { DbLogin } from "@/lib/db-roles";
 import { readCtx, type ViewerRef } from "@/lib/read-login";
+import { getDmInbox } from "@/lib/queries-chat";
 import { getViewer } from "@/lib/auth/viewer";
 import { isDevAuthEnabled } from "@/lib/dev-user";
 import { splitList } from "@/lib/format";
@@ -12,7 +13,6 @@ import {
   USER_COLS,
   bool,
   notBlockedWith,
-  presenceExpr,
   str,
   visibleToViewer,
 } from "@/lib/sql-parts";
@@ -267,52 +267,7 @@ export const getFriendLists = cache(async (ref: ViewerRef): Promise<FriendLists>
 });
 
 // ---------------------------------------------------------------- direct messages
-interface DmRow {
-  message_id: number;
-  other_id: number;
-  other_username: string;
-  other_display_name: string;
-  other_presence: Presence;
-  sender_id: number;
-  content: string | null;
-  is_deleted: unknown;
-  sent_at: string;
-}
-
-/** Latest DM per conversation partner, newest first (max 5). */
+/** Latest DM per conversation partner, newest first (max 5), through sp_dm_inbox. */
 export async function getRecentDms(ref: ViewerRef): Promise<DmThread[]> {
-  const { login, viewerId: userId } = await readCtx(ref);
-  if (userId === null) return []; // anonymous: the web login cannot read message
-  const rows = await queryAs<DmRow>(
-    login,
-    `SELECT t.message_id, t.other_id, u.username AS other_username, u.display_name AS other_display_name,
-            ${presenceExpr("u")} AS other_presence,
-            t.sender_id, IF(t.is_deleted, NULL, t.content) AS content, t.is_deleted, t.sent_at
-       FROM (
-         SELECT m.message_id, m.sender_id, m.content, m.sent_at, m.is_deleted,
-                IF(m.sender_id = ?, m.receiver_id, m.sender_id) AS other_id,
-                ROW_NUMBER() OVER (
-                  PARTITION BY IF(m.sender_id = ?, m.receiver_id, m.sender_id)
-                  ORDER BY m.sent_at DESC, m.message_id DESC) AS rn
-           FROM message m
-          WHERE m.session_id IS NULL AND (m.sender_id = ? OR m.receiver_id = ?)
-       ) t
-       JOIN users u ON u.user_id = t.other_id
-      WHERE t.rn = 1
-        AND ${notBlockedWith("u")}
-      ORDER BY t.sent_at DESC, t.message_id DESC
-      LIMIT 5`,
-    [userId, userId, userId, userId, userId, userId],
-  );
-  return rows.map((r) => ({
-    message_id: r.message_id,
-    other_id: r.other_id,
-    other_username: r.other_username,
-    other_display_name: r.other_display_name,
-    other_presence: r.other_presence,
-    sent_by_me: r.sender_id === userId,
-    content: bool(r.is_deleted) ? null : str(r.content),
-    is_deleted: bool(r.is_deleted),
-    sent_at: r.sent_at,
-  }));
+  return (await getDmInbox(ref)).slice(0, 5);
 }

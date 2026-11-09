@@ -5,6 +5,7 @@ import type { Viewer } from "@/lib/auth/viewer";
 import { writeLoginFor } from "@/lib/auth/session";
 import { readCtx, type ViewerRef } from "@/lib/read-login";
 import { bool, canViewCamp, str } from "@/lib/sql-parts";
+import { fetchChatLines, isRefusal } from "@/lib/queries-chat";
 import type {
   Camp,
   ChatMessage,
@@ -207,34 +208,32 @@ export async function getSessionTags(sessionId: number): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-interface ChatRow extends Omit<ChatMessage, "is_deleted"> {
-  is_deleted: unknown;
-}
-
 /**
- * The latest CHAT_LIMIT chat lines, oldest first. Returns null (locked) unless
- * the viewer is the host or an accepted participant. Deleted bodies are never fetched.
+ * The latest chat page (CHAT_LIMITS.historyPage lines), oldest first, through sp_chat_history. Returns null
+ * (locked) unless the viewer is the host or an accepted participant. Deleted bodies come back as null.
  */
 export async function getSessionChat(sessionId: number, ref: ViewerRef): Promise<ChatMessage[] | null> {
-  const { login, viewerId } = await readCtx(ref);
-  // anonymous never reaches message: the web login has no SELECT on it
+  const { viewerId } = await readCtx(ref);
+  // anonymous never reaches message
   if (viewerId === null || !(await isCampMember(sessionId, ref))) return null;
-  const rows = await queryAs<ChatRow>(
-    login,
-    `SELECT t.message_id, t.sender_id, t.username, t.display_name, t.content, t.is_deleted, t.sent_at, t.edited_at
-       FROM (
-         SELECT m.message_id, m.sender_id, u.username, u.display_name,
-                IF(m.is_deleted, NULL, m.content) AS content, m.is_deleted, m.sent_at, m.edited_at
-           FROM message m
-           JOIN users u ON u.user_id = m.sender_id
-          WHERE m.session_id = ?
-          ORDER BY m.sent_at DESC, m.message_id DESC
-          LIMIT ${CHAT_LIMIT}
-       ) t
-      ORDER BY t.sent_at ASC, t.message_id ASC`,
-    [sessionId],
-  );
-  return rows.map((r) => ({ ...r, content: str(r.content), is_deleted: bool(r.is_deleted) }));
+  let lines;
+  try {
+    lines = await fetchChatLines(ref, sessionId, null);
+  } catch (err) {
+    // a refusal for a member means the account cannot act (suspended): show an empty, read-only log
+    if (isRefusal(err)) return [];
+    throw err;
+  }
+  return lines.map((l) => ({
+    message_id: l.messageId,
+    sender_id: l.senderId,
+    username: l.username,
+    display_name: l.displayName,
+    content: l.content,
+    is_deleted: l.isDeleted,
+    sent_at: l.sentAt,
+    edited_at: l.editedAt,
+  }));
 }
 
 // ---------------------------------------------------------------- party

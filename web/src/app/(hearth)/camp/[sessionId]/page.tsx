@@ -9,6 +9,7 @@ import { PartySeats } from "@/components/hearth/PartySeats";
 import { SignInGate } from "@/components/hearth/SignInGate";
 import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { InviteBox } from "@/components/camp/InviteBox";
+import { RatePartyPanel } from "@/components/review/RatePartyPanel";
 import { getViewer, hasRole } from "@/lib/auth/guards";
 import { markRecommendationOutcome } from "@/lib/recommend";
 import {
@@ -23,6 +24,8 @@ import {
   getSlotNeeds,
   isCampMember,
 } from "@/lib/queries";
+import { getChatStatus } from "@/lib/queries-chat";
+import { composerState } from "@/components/chat/composer-state";
 
 type Params = { sessionId: string };
 
@@ -77,13 +80,14 @@ export default async function CampPage({
   // best effort and not awaited: logging a view must never slow or fail the page
   void markRecommendationOutcome(viewer, id, "viewed");
 
-  const [roster, needs, languages, tags, chat, isMember] = await Promise.all([
+  const [roster, needs, languages, tags, chat, isMember, chatStatus] = await Promise.all([
     getRoster(id, viewer),
     getSlotNeeds(id),
     getSessionLanguages(id),
     getSessionTags(id),
     getSessionChat(id, viewer),
     isCampMember(id, viewer),
+    getChatStatus(viewer),
   ]);
   const role: ViewerRole =
     camp.host_id === user.user_id
@@ -138,7 +142,16 @@ export default async function CampPage({
         </div>
       </div>
 
-      <DialogueLog messages={chat} hostId={camp.host_id} status={camp.status} timeZone={user.timezone} />
+      <DialogueLog
+        messages={chat}
+        sessionId={id}
+        viewerId={user.user_id}
+        hostId={camp.host_id}
+        status={camp.status}
+        timeZone={user.timezone}
+        composer={composerState(viewer.status, chatStatus, user.timezone)}
+      />
+      {camp.status === "completed" ? <RatePartyPanel sessionId={id} viewer={viewer} /> : null}
     </div>
   );
 }
