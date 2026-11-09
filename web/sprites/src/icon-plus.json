@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "p": "#43386a",
+  "g": "#72c374",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kppppppppppppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kppggggggggppk.",
+  ".kppggggggggppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kpppppggpppppk.",
+  ".kppppppppppppk.",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "green plus on a plum tile"
+}

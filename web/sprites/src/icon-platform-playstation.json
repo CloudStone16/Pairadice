@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "L": "#b4a7e8",
+  "y": "#f2c35b",
+  "g": "#72c374",
+  "r": "#e8665f",
+  "b": "#6a95e6",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kLLLLLLLLLLLLk.",
+  ".kLLkLLLLLLyLLk.",
+  ".kLkkkLLLLgLrLk.",
+  ".kLLkLLLLLLbLLk.",
+  ".kLLLLLLLLLLLLk.",
+  ".kLLLLkkkkLLLLk.",
+  ".kLLLk....kLLLk.",
+  ".kLLLk....kLLLk.",
+  "..kkk......kkk..",
+  "................",
+  "................"
+ ],
+ "notes": "generic gamepad: cross d-pad on the left, four coloured face dots on the right"
+}

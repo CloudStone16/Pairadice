@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "G": "#72c374",
+  "y": "#f2c35b",
+  "r": "#e8665f",
+  "b": "#6a95e6",
+  "c": "#f3ead3",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kGGGGGGGGGGGGk.",
+  ".kGkkGGGGGGyGGk.",
+  ".kGkkGGGGGbGrGk.",
+  ".kGGGGkGGGGcGGk.",
+  ".kGGGkkkGGkkGGk.",
+  ".kGGGGkGGGkkGGk.",
+  ".kGGGGkkkkGGGGk.",
+  ".kGGGk....kGGGk.",
+  ".kGGGk....kGGGk.",
+  "..kkk......kkk..",
+  "................"
+ ],
+ "notes": "generic gamepad: stick top-left, d-pad low-left, face diamond top-right, stick low-right"
+}

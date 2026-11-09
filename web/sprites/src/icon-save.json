@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "w": "#bd8458",
+  "W": "#5e3b27",
+  "b": "#c99a3a",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "................",
+  "...kkkkkkkkkk...",
+  "..kwbwwwwwwbwk..",
+  ".kwwbwwwwwwbwwk.",
+  ".kbbbbbbbbbbbbk.",
+  ".kWWbWWbbWWbWWk.",
+  ".kWWbWWbkWWbWWk.",
+  ".kWWbWWWWWWbWWk.",
+  ".kWWbWWWWWWbWWk.",
+  ".kWWbWWWWWWbWWk.",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................"
+ ],
+ "notes": "small wooden chest with brass bands and lock; save"
+}

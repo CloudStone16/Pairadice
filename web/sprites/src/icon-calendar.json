@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "r": "#e8665f",
+  "p": "#efe2c4",
+  "d": "#dccaa3",
+  "y": "#f2c35b",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "....k......k....",
+  "....k......k....",
+  ".kkkkkkkkkkkkkk.",
+  ".krrrrrrrrrrrrk.",
+  ".krrrrrrrrrrrrk.",
+  ".kppppppppppppk.",
+  ".kpdpdpdpdpdppk.",
+  ".kppppppppppppk.",
+  ".kpdpdpypdpdppk.",
+  ".kppppppppppppk.",
+  ".kpdpdpdpdpdppk.",
+  ".kppppppppppppk.",
+  ".kppppppppppppk.",
+  ".kkkkkkkkkkkkkk.",
+  "................"
+ ],
+ "notes": "calendar page with rings, header and date grid"
+}

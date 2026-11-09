@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "p": "#43386a",
+  "r": "#e8665f",
+  "m": "#b4a7e8",
+  "s": "#a094d6",
+  "h": "#f3ead3",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "...kkkk..kkkk...",
+  "...kppk..krrk...",
+  "....kppkkrrk....",
+  ".....kpprrk.....",
+  ".....kkkkkk.....",
+  "....khhmmmmk....",
+  "...khmmmmmmmk...",
+  "..khmmkkkkmmmk..",
+  "..khmkhhhhkmsk..",
+  "..kmmkhhhhkmsk..",
+  "..kmmkhhhhkmsk..",
+  "..kmmkhhhhkmsk..",
+  "..kmmmkkkkmmsk..",
+  "...kmmmmmsssk...",
+  "....kssssssk....",
+  ".....kkkkkk....."
+ ],
+ "notes": "platinum medal, small cut gem"
+}

@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "p": "#43386a",
+  "s": "#6a95e6",
+  "c": "#f3ead3",
+  "l": "#a094d6",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  ".kppppppppppppk.",
+  ".kpccsssssssspk.",
+  ".kpcssssssssspk.",
+  ".kpsssssssssspk.",
+  ".kpsssssssssspk.",
+  ".kpsssssssssspk.",
+  ".kppppppppppppk.",
+  ".kkkkkkkkkkkkkk.",
+  "......kllk......",
+  ".kkkkkkkkkkkkkk.",
+  ".kclclclclclclk.",
+  ".kkkkkkkkkkkkkk.",
+  "................"
+ ],
+ "notes": "monitor on a stand above a keyboard"
+}

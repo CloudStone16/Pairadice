@@ -1,0 +1,26 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#e8665f",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  ".kk..........kk.",
+  "kRRk........kRRk",
+  "kRRRk......kRRRk",
+  ".kRRRk....kRRRk.",
+  "..kRRRk..kRRRk..",
+  "...kRRRkkRRRk...",
+  "....kRRRRRRk....",
+  ".....kRRRRk.....",
+  "....kRRRRRRk....",
+  "...kRRRkkRRRk...",
+  "..kRRRk..kRRRk..",
+  ".kRRRk....kRRRk.",
+  "kRRRk......kRRRk",
+  "kRRk........kRRk",
+  ".kk..........kk."
+ ],
+ "notes": "bold red cross"
+}

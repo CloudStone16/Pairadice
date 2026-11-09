@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#e8665f",
+  "B": "#6a95e6",
+  "n": "#1d1830",
+  "c": "#f3ead3",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  "kBBBccccccccRRRk",
+  "kBBBcnnnnnncRcRk",
+  "kBkBcnnnnnncRRRk",
+  "kBBBcnnnnnncRRRk",
+  "kBBBcnnnnnncRkRk",
+  "kBcBcnnnnnncRRRk",
+  "kBBBccccccccRRRk",
+  "kBBBccccccccRRRk",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "landscape handheld: dark screen in a cream bezel, blue left grip and red right grip, a stick dot on each"
+}

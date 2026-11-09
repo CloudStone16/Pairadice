@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "c": "#f3ead3",
+  "d": "#dccaa3",
+  "l": "#a094d6",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  ".....kkkkkk.....",
+  "...kkcccccckk...",
+  ".kkcccckkcccckk.",
+  ".kdkkcckkcckklk.",
+  ".kddkkcccckkllk.",
+  ".kdddkkcckklllk.",
+  ".kddddkkkkllllk.",
+  ".kdddddkklklllk.",
+  ".kdkdddkklllllk.",
+  ".kdddddkkllkllk.",
+  ".kdddkdkklllllk.",
+  "..kddddkklllkk..",
+  "...kdddkklllk...",
+  "....kddkkllk....",
+  "......kkkk......"
+ ],
+ "notes": "d6 in 3/4 view: top face 1 pip, left 2, right 3; randomise"
+}

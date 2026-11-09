@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "p": "#43386a",
+  "r": "#e8665f",
+  "m": "#a094d6",
+  "s": "#43386a",
+  "h": "#f3ead3",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "...kkkk..kkkk...",
+  "...kppk..krrk...",
+  "....kppkkrrk....",
+  ".....kpprrk.....",
+  ".....kkkkkk.....",
+  "....khhmmmmk....",
+  "...khmmmmmmmk...",
+  "..khmmmmmmmmmk..",
+  "..khmmmmmmmmsk..",
+  "..kmmkkmmkkmsk..",
+  "..kmmkkmmkkmsk..",
+  "..kmmmmmmmmmsk..",
+  "..kmmmmmmmmmsk..",
+  "...kmmmmmsssk...",
+  "....kssssssk....",
+  ".....kkkkkk....."
+ ],
+ "notes": "silver medal, two dots"
+}

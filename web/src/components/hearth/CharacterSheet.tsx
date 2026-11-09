@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Avatar, Chip, Meter, Sprite, Tooltip, Window } from "@/components/ui";
+import { Avatar, ButtonLink, Chip, Meter, Sprite, Tooltip, Window } from "@/components/ui";
 import { cartSprite } from "@/lib/format";
 import type { PlayerBadge, PlayerCard, PlayerGame, PlayerLanguage, Presence } from "@/lib/types";
 import { PresenceLabel } from "./PresenceLabel";
@@ -64,6 +64,12 @@ export function CharacterSheet({
           <div className="mt-2 w-full max-w-xs">
             <Meter value={card.trust_score} label="Trust" />
           </div>
+          {isSelf ? (
+            <ButtonLink href="/character/edit" variant="yellow" size="sm" className="mt-1 min-h-11">
+              <Sprite name="icon-pencil" />
+              Edit character
+            </ButtonLink>
+          ) : null}
           {relationship}
         </Window>
       </div>
