@@ -205,7 +205,8 @@ Then in the browser:
    `pd_auth_sock`. The password is stored as an argon2id hash, and the cookie holds a random token whose HMAC is
    the only thing stored in `auth_token`.
 2. Visit `/mod` as that new player: the page returns **404**, because the guard does not reveal that it exists.
-   Switch "play as" to **10 `admin_sam`** and `/mod` (Guild Hall) loads, as does `/admin/vector`.
+   Then **sign out**. A real session hides the "play as" menu and always wins over it, so the menu only comes back
+   after sign-out. Switch "play as" to **10 `admin_sam`** and `/mod` (Guild Hall) loads, as does `/admin/vector`.
 
 ## 6:30 – 8:30 · NoSQL vector store: create, read, update, delete (4 + 7 marks)
 
