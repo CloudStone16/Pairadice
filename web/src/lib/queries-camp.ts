@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import { query } from "@/lib/db";
+import { query, queryAs } from "@/lib/db";
+import type { Viewer } from "@/lib/auth/viewer";
+import { writeLoginFor } from "@/lib/auth/session";
 import { CAN_VIEW_CAMP, bool, str } from "@/lib/sql-parts";
 import type {
   Camp,
@@ -121,6 +123,61 @@ export async function getSlotNeeds(sessionId: number): Promise<SlotNeed[]> {
       ORDER BY ss.slot_no`,
     [sessionId],
   );
+}
+
+/**
+ * Roles a visitor can ask for: the roles the host is looking for, or every role of the game when the
+ * host listed none.
+ */
+export async function getJoinRoles(sessionId: number): Promise<Array<{ id: number; name: string }>> {
+  const needed = await query<{ id: number; name: string }>(
+    `SELECT DISTINCT gr.game_role_id AS id, gr.name
+       FROM session_slot ss
+       JOIN game_role gr ON gr.game_role_id = ss.game_role_id
+      WHERE ss.session_id = ?
+      ORDER BY gr.name`,
+    [sessionId],
+  );
+  if (needed.length > 0) return needed.map((r) => ({ id: Number(r.id), name: r.name }));
+  const all = await query<{ id: number; name: string }>(
+    `SELECT gr.game_role_id AS id, gr.name
+       FROM lfg_session s
+       JOIN game_role gr ON gr.game_id = s.game_id
+      WHERE s.session_id = ?
+      ORDER BY gr.name`,
+    [sessionId],
+  );
+  return all.map((r) => ({ id: Number(r.id), name: r.name }));
+}
+
+/**
+ * The viewer's own platform accounts on the session's platform, for the join form. Neither the web nor
+ * the player login can SELECT platform_account, so this calls sp_my_platform_accounts (own rows only)
+ * through the viewer's write login. Empty when the viewer cannot write or the call fails.
+ */
+export async function getMyPlatformAccounts(
+  viewer: Viewer,
+  sessionId: number,
+): Promise<Array<{ id: number; label: string }>> {
+  try {
+    const plat = await query<{ platform_id: number }>("SELECT platform_id FROM lfg_session WHERE session_id = ?", [sessionId]);
+    const platformId = plat[0] ? Number(plat[0].platform_id) : null;
+    if (platformId === null) return [];
+    const sets = await queryAs<Array<{ account_id: number; platform_id: number; handle: string; discriminator: string | null }>>(
+      writeLoginFor(viewer),
+      "CALL sp_my_platform_accounts(?)",
+      [viewer.userId],
+    );
+    const rows = (sets[0] ?? []) as unknown as Array<{ account_id: number; platform_id: number; handle: string; discriminator: string | null }>;
+    return rows
+      .filter((r) => Number(r.platform_id) === platformId)
+      .map((r) => ({
+        id: Number(r.account_id),
+        label: r.discriminator ? `${r.handle}#${r.discriminator.replace(/^#/, "")}` : r.handle,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getSessionLanguages(sessionId: number): Promise<string[]> {

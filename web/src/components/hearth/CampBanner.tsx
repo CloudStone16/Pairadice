@@ -1,4 +1,5 @@
-import { Avatar, Button, Chip, Sprite, Window } from "@/components/ui";
+import { Avatar, Chip, Sprite, Window } from "@/components/ui";
+import type { ReactNode } from "react";
 import { cartSprite, formatWhen } from "@/lib/format";
 import type { Camp } from "@/lib/types";
 import { StatusChip } from "./StatusChip";
@@ -7,26 +8,36 @@ import { UserLink } from "./UserLink";
 /** How the viewer relates to the camp. */
 export type ViewerRole = "host" | "member" | "knocking" | "none";
 
-function CampAction({ camp, role }: { camp: Camp; role: ViewerRole }) {
-  if (role === "host") return <Chip tone="ember" icon={<Sprite name="icon-crown" />}>You&apos;re hosting</Chip>;
-  if (role === "member") return <Chip tone="green" icon={<Sprite name="icon-party" />}>You&apos;re in the party</Chip>;
-  if (role === "knocking") return <Chip tone="lavender" icon={<Sprite name="icon-knock" />}>You&apos;re knocking at the door</Chip>;
-  if (camp.status !== "open") return null;
-  // Phase 1 is read-only, so the door cannot be knocked on yet.
+function CampAction({ camp, role, actions }: { camp: Camp; role: ViewerRole; actions?: ReactNode }) {
+  if (role === "none") return camp.status === "open" ? (actions ?? null) : null;
+  const chip =
+    role === "host" ? (
+      <Chip tone="ember" icon={<Sprite name="icon-crown" />}>You&apos;re hosting</Chip>
+    ) : role === "member" ? (
+      <Chip tone="green" icon={<Sprite name="icon-party" />}>You&apos;re in the party</Chip>
+    ) : (
+      <Chip tone="lavender" icon={<Sprite name="icon-knock" />}>You&apos;re knocking at the door</Chip>
+    );
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button variant="yellow" disabled aria-describedby="knock-help">
-        <Sprite name="icon-knock" />
-        Knock on the door
-      </Button>
-      <p id="knock-help" className="text-sm text-wood-dark">
-        Knocking opens in the next update
-      </p>
+    <div className="flex flex-col items-start gap-3">
+      {chip}
+      {actions}
     </div>
   );
 }
 
-export function CampBanner({ camp, role, timeZone }: { camp: Camp; role: ViewerRole; timeZone: string }) {
+export function CampBanner({
+  camp,
+  role,
+  timeZone,
+  actions,
+}: {
+  camp: Camp;
+  role: ViewerRole;
+  timeZone: string;
+  /** Interactive controls for the viewer (the camp page passes <CampActions />). */
+  actions?: ReactNode;
+}) {
   const when = formatWhen(camp.scheduled_start, timeZone);
   return (
     <Window variant="parchment">
@@ -63,7 +74,7 @@ export function CampBanner({ camp, role, timeZone }: { camp: Camp; role: ViewerR
             </Chip>
           </div>
           <div className="mt-4 empty:hidden">
-            <CampAction camp={camp} role={role} />
+            <CampAction camp={camp} role={role} actions={actions} />
           </div>
         </div>
       </div>

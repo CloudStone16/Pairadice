@@ -1,4 +1,11 @@
 import type { ReactNode } from "react";
+import {
+  acceptPlayerAction,
+  declinePlayerAction,
+  kickPlayerAction,
+} from "@/app/(hearth)/camp/[sessionId]/actions";
+import { ActionControl } from "@/components/camp/ActionControl";
+import { SeatPortrait } from "@/components/camp/SeatPortrait";
 import { Avatar, Chip, Sprite, Window } from "@/components/ui";
 import { formatStamp } from "@/lib/format";
 import type { Camp, RosterEntry } from "@/lib/types";
@@ -22,10 +29,22 @@ function Seat({ children, tone = "filled" }: { children: ReactNode; tone?: "fill
   );
 }
 
-function SeatedPlayer({ p, isHost, isMe }: { p: RosterEntry; isHost: boolean; isMe: boolean }) {
+function SeatedPlayer({
+  p,
+  sessionId,
+  isHost,
+  isMe,
+  canKick,
+}: {
+  p: RosterEntry;
+  sessionId: number;
+  isHost: boolean;
+  isMe: boolean;
+  canKick: boolean;
+}) {
   return (
     <Seat>
-      <Avatar userId={p.user_id} size={64} />
+      <SeatPortrait sessionId={sessionId} userId={p.user_id} state="accepted" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <UserLink userId={p.user_id} className="[overflow-wrap:anywhere]">
@@ -47,6 +66,20 @@ function SeatedPlayer({ p, isHost, isMe }: { p: RosterEntry; isHost: boolean; is
             ) : null}
           </p>
         ) : null}
+        {canKick ? (
+          <div className="mt-2">
+            <ActionControl
+              action={kickPlayerAction}
+              fields={{ sessionId, userId: p.user_id }}
+              label="Kick"
+              accessibleName={`Kick ${p.username}`}
+              icon="icon-kick"
+              variant="red"
+              size="sm"
+              confirm={{ prompt: `Remove ${p.username} from the party?`, yes: "Yes, remove", no: "Keep" }}
+            />
+          </div>
+        ) : null}
       </div>
     </Seat>
   );
@@ -57,6 +90,7 @@ export function PartySeats({
   roster,
   viewerId,
   canSeePrivate,
+  canManage,
   timeZone,
 }: {
   camp: Camp;
@@ -64,6 +98,8 @@ export function PartySeats({
   viewerId: number;
   /** Host or accepted participant: gamertags are visible. */
   canSeePrivate: boolean;
+  /** Host or moderator: may accept, decline and kick. */
+  canManage: boolean;
   timeZone: string;
 }) {
   const accepted = roster.filter((r) => r.status === "accepted");
@@ -72,6 +108,7 @@ export function PartySeats({
   const openSeats = Math.max(0, camp.max_players - accepted.length);
   const emptyCount = Math.max(0, openSeats - knocking.length);
   const closed = camp.status === "completed" || camp.status === "cancelled";
+  const live = !closed;
 
   return (
     <Window title="Party seats" landmark>
@@ -82,12 +119,19 @@ export function PartySeats({
       {canSeePrivate ? null : <LockedNote status={camp.status} className="mb-4" />}
       <ul role="list" className="grid gap-3 sm:grid-cols-2">
         {accepted.map((p) => (
-          <SeatedPlayer key={p.user_id} p={p} isHost={p.user_id === camp.host_id} isMe={p.user_id === viewerId} />
+          <SeatedPlayer
+            key={p.user_id}
+            p={p}
+            sessionId={camp.session_id}
+            isHost={p.user_id === camp.host_id}
+            isMe={p.user_id === viewerId}
+            canKick={canManage && live && p.user_id !== camp.host_id}
+          />
         ))}
         {knocking.map((p) => (
           <Seat key={p.user_id} tone="knock">
             <span className="relative">
-              <Avatar userId={p.user_id} size={64} />
+              <SeatPortrait sessionId={camp.session_id} userId={p.user_id} state="knocking" />
               <Sprite name="icon-knock" className="absolute -right-2 -top-2" />
             </span>
             <div className="min-w-0 flex-1">
@@ -96,6 +140,28 @@ export function PartySeats({
               </UserLink>
               <p className="text-sm text-ember">Knocking at the door{p.game_role ? ` · ${p.game_role}` : ""}</p>
               {p.user_id === viewerId ? <Chip tone="lavender">You</Chip> : null}
+              {canManage && camp.status === "open" ? (
+                <div className="mt-2 flex flex-wrap items-start gap-2">
+                  <ActionControl
+                    action={acceptPlayerAction}
+                    fields={{ sessionId: camp.session_id, userId: p.user_id }}
+                    label="Accept"
+                    accessibleName={`Accept ${p.username}`}
+                    icon="icon-accept"
+                    variant="green"
+                    size="sm"
+                  />
+                  <ActionControl
+                    action={declinePlayerAction}
+                    fields={{ sessionId: camp.session_id, userId: p.user_id }}
+                    label="Decline"
+                    accessibleName={`Decline ${p.username}`}
+                    icon="icon-decline"
+                    variant="ghost"
+                    size="sm"
+                  />
+                </div>
+              ) : null}
             </div>
           </Seat>
         ))}

@@ -4,12 +4,17 @@ import { CampBanner, type ViewerRole } from "@/components/hearth/CampBanner";
 import { CampRules, LookingFor } from "@/components/hearth/CampRules";
 import { CampPaused } from "@/components/hearth/CampPaused";
 import { DialogueLog } from "@/components/hearth/DialogueLog";
+import { CampActions } from "@/components/hearth/CampActions";
 import { PartySeats } from "@/components/hearth/PartySeats";
 import { SignInGate } from "@/components/hearth/SignInGate";
-import { Sprite, buttonClasses } from "@/components/ui";
+import { InviteBox } from "@/components/camp/InviteBox";
+import { getViewer, hasRole } from "@/lib/auth/guards";
+import { markRecommendationOutcome } from "@/lib/recommend";
 import {
   getCamp,
   getCurrentUser,
+  getJoinRoles,
+  getMyPlatformAccounts,
   getRoster,
   getSessionChat,
   getSessionLanguages,
@@ -61,6 +66,10 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
   // a suspended or banned host pauses the camp: nothing else about it is fetched or rendered
   if (isPaused(camp.host_status)) return <CampPaused />;
 
+  const viewer = await getViewer();
+  // best effort and not awaited: logging a view must never slow or fail the page
+  if (viewer) void markRecommendationOutcome(viewer, id, "viewed");
+
   const [roster, needs, languages, tags, chat, isMember] = await Promise.all([
     getRoster(id, user.user_id),
     getSlotNeeds(id),
@@ -77,6 +86,11 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
         : roster.some((r) => r.user_id === user.user_id && r.status === "requested")
           ? "knocking"
           : "none";
+  const canJoin = role === "none" && camp.status === "open";
+  const [joinRoles, accounts] = canJoin && viewer
+    ? await Promise.all([getJoinRoles(id), getMyPlatformAccounts(viewer, id)])
+    : [[], []];
+  const canManage = role === "host" || (viewer !== null && hasRole(viewer, "moderator"));
   const invite =
     isMember && camp.discord_invite_url && /^https?:\/\//i.test(camp.discord_invite_url)
       ? camp.discord_invite_url
@@ -84,7 +98,21 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
 
   return (
     <div className="flex flex-col gap-10">
-      <CampBanner camp={camp} role={role} timeZone={user.timezone} />
+      <CampBanner
+        camp={camp}
+        role={role}
+        timeZone={user.timezone}
+        actions={
+          <CampActions
+            sessionId={id}
+            status={camp.status}
+            role={role}
+            roles={joinRoles}
+            accounts={accounts}
+            auto={camp.join_policy === "auto"}
+          />
+        }
+      />
 
       <div className="grid gap-10 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <PartySeats
@@ -92,23 +120,13 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
           roster={roster}
           viewerId={user.user_id}
           canSeePrivate={isMember}
+          canManage={canManage}
           timeZone={user.timezone}
         />
         <div className="flex flex-col gap-10">
           <LookingFor needs={needs} />
           <CampRules camp={camp} languages={languages} tags={tags} />
-          {invite ? (
-            <a
-              href={invite}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonClasses("blue", "md", "self-start")}
-            >
-              <Sprite name="icon-chat" />
-              Join the Discord
-              <span className="sr-only"> (opens in a new tab)</span>
-            </a>
-          ) : null}
+          {invite ? <InviteBox url={invite} /> : null}
         </div>
       </div>
 
