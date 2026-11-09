@@ -1,8 +1,12 @@
+import { Suspense } from "react";
 import { Avatar, Sprite, Window } from "@/components/ui";
+import { getViewer } from "@/lib/auth/viewer";
+import { getHybridRecommendations } from "@/lib/recommend";
 import type { FriendEntry, Quest } from "@/lib/types";
 import { CampfireFlame } from "./CampfireFlame";
 import { PresenceLabel } from "./PresenceLabel";
 import { QuickPicks } from "./QuickPicks";
+import { SimilarPlayers } from "./SimilarPlayers";
 import { UserLink } from "./UserLink";
 
 /** Friends seated around the fire at most. */
@@ -59,6 +63,21 @@ function FriendRows({ friends }: { friends: FriendEntry[] }) {
   );
 }
 
+/** Hybrid picks (shared interests aware); falls back to the plain SQL picks if anything fails. Raw scores stay on the server. */
+async function Picks({ fallback }: { fallback: Quest[] }) {
+  let picks = fallback;
+  try {
+    const viewer = await getViewer();
+    if (viewer) {
+      const { quests } = await getHybridRecommendations(viewer, 3);
+      picks = quests.map((q) => ({ ...q, breakdown: undefined }));
+    }
+  } catch {
+    // keep the SQL picks
+  }
+  return <QuickPicks recommended={picks} />;
+}
+
 const headingClass = "mb-2 mt-5 font-display text-sm font-semibold uppercase tracking-wider text-lavender";
 
 /**
@@ -111,9 +130,15 @@ export function Campfire({ friends, recommended }: { friends: FriendEntry[]; rec
             ) : null}
           </>
         )}
+
+        <Suspense fallback={<p className="mt-5 text-sm text-lavender">Looking for kindred spirits...</p>}>
+          <SimilarPlayers />
+        </Suspense>
       </Window>
 
-      <QuickPicks recommended={recommended} />
+      <Suspense fallback={null}>
+        <Picks fallback={recommended} />
+      </Suspense>
     </div>
   );
 }
