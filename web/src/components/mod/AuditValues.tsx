@@ -15,9 +15,18 @@ function show(v: unknown, tz: string): string {
 }
 
 export function AuditValues({ value, label, timeZone }: { value: Record<string, unknown> | null; label: string; timeZone: string }) {
-  if (value === null) return <span aria-label={`${label}: nothing`}>&ndash;</span>;
+  if (value === null) return (
+      <span>
+        <span aria-hidden="true">&ndash;</span>
+        <span className="sr-only">{label}: nothing</span>
+      </span>
+    );
   const entries = Object.entries(value);
-  if (entries.length === 0) return <span aria-label={`${label}: empty`}>(empty)</span>;
+  if (entries.length === 0) return (
+      <span>
+        (empty)<span className="sr-only"> {label}</span>
+      </span>
+    );
   return (
     <dl aria-label={label} className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
       {entries.map(([k, v]) => (

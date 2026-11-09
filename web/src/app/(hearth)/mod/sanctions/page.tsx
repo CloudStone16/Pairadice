@@ -77,7 +77,7 @@ export default async function SanctionsPage({ searchParams }: { searchParams: Pr
     },
     {
       header: "Lift",
-      className: "min-w-52",
+      className: "sm:min-w-52",
       cell: (s) =>
         s.type === "warn" ? (
           <span className="text-lavender">Nothing to lift</span>

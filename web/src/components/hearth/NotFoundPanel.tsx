@@ -17,7 +17,7 @@ export function NotFoundPanel({
       <EmptyState
         as="h1"
         title={title}
-        sprite="icon-scroll"
+        mascot="sad"
         action={
           <ButtonLink href={href} variant="yellow" size="sm">
             {cta}

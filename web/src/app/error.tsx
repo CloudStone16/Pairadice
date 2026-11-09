@@ -37,7 +37,7 @@ export default function RootError({
     <main className="mx-auto flex w-full max-w-xl flex-1 items-center px-4 py-16">
       <Window title="Something went wrong" titleAs="p" className="w-full">
         <div role="alert" className="flex items-start gap-4">
-          <Sprite name="campfire-1" scale={2} />
+          <Sprite name="mascot-cat-sad" scale={2} />
           <div>
             <h1 className="font-display text-2xl font-bold leading-tight [text-shadow:0_2px_0_var(--color-ink)]">
               The campfire sputtered

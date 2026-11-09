@@ -3,7 +3,7 @@ import type { SpriteName } from "@/lib/sprite-names";
 
 /** Sprites are authored at 32px: 16 is half, 32 native, 64 double. */
 export type AvatarSize = 16 | 32 | 64;
-export type AvatarStatus = "online" | "ingame" | "idle" | "away" | "suspended";
+export type AvatarStatus = "online" | "ingame" | "idle" | "away" | "suspended" | "unavailable";
 
 const STATUS_LABEL: Record<AvatarStatus, string> = {
   online: "Online",
@@ -11,6 +11,7 @@ const STATUS_LABEL: Record<AvatarStatus, string> = {
   idle: "Idle",
   away: "Away",
   suspended: "Suspended",
+  unavailable: "Unavailable",
 };
 
 const AVATARS: readonly SpriteName[] = [
@@ -69,6 +70,7 @@ function StatusDot({ status, px }: { status: AvatarStatus; px: number }) {
               <path d="M7 2.6a4.4 4.4 0 0 0 0 8.8z" fill="#f2c35b" />
             </>
           ) : null}
+          {status === "unavailable" ? <rect x="3" y="6" width="8" height="2" fill="#f3ead3" /> : null}
           {status === "away" ? (
             <circle cx="7" cy="7" r="4.4" fill="none" stroke="#a094d6" strokeWidth="1.8" />
           ) : null}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EmptyState } from "@/components/hearth/EmptyState";
 import { UserList } from "@/components/admin/UserList";
 import { Button, Sprite, Window } from "@/components/ui";
 import { requireRole } from "@/lib/auth/guards";
@@ -48,7 +49,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           {users.length === USER_LIST_LIMIT ? "+" : ""})
         </h2>
         {users.length === 0 ? (
-          <p className="text-lavender">No one by that name. Try fewer letters.</p>
+          <EmptyState title="No one by that name" sprite="icon-search" as="h3">
+            Check the spelling or try fewer letters.
+          </EmptyState>
         ) : (
           <UserList users={users} />
         )}

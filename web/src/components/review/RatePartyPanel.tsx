@@ -1,4 +1,4 @@
-import { Window } from "@/components/ui";
+import { Sprite, Window } from "@/components/ui";
 import type { Viewer } from "@/lib/auth/viewer";
 import { getPendingReviews } from "@/lib/mutations/review";
 import { ReviewForm } from "./ReviewForm";
@@ -18,5 +18,16 @@ export async function RatePartyPanel({ sessionId, viewer }: { sessionId: number;
         ))}
       </ul>
     </Window>
+  );
+}
+
+/** Shown after the last teammate was rated (?rated=1), when the panel itself has gone. */
+export function RatedNotice({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <p role="status" className="flex items-start gap-2 rounded-frame bg-plum-2 p-3 font-semibold ring-1 ring-inset ring-lavender/50">
+      <Sprite name="icon-check" className="mt-0.5" />
+      Thanks, your party is rated.
+    </p>
   );
 }

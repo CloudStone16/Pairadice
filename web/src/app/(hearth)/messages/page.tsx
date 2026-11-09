@@ -34,7 +34,7 @@ export default async function MessagesPage() {
                   href={`/messages/${t.other_id}`}
                   className="flex min-h-14 items-start gap-3 rounded-frame bg-ink/30 p-3 transition duration-150 hover:bg-ink/50"
                 >
-                  <Avatar userId={t.other_id} size={32} status={t.other_presence} />
+                  <Avatar userId={t.other_id} size={32} status={t.other_presence} statusText={false} />
                   <span className="min-w-0 flex-1 leading-tight">
                     <span className="flex flex-wrap items-baseline justify-between gap-x-3">
                       <span className="font-display text-base font-semibold [overflow-wrap:anywhere]">{t.other_display_name}</span>

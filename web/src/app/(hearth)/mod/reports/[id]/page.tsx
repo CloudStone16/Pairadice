@@ -19,7 +19,7 @@ const CATEGORY_LABEL: Record<string, string> = { harassment: "Harassment", cheat
 
 function Party({ title, card, earlierLabel }: { title: string; card: PartyCard; earlierLabel: string }) {
   return (
-    <Window title={title} titleAs="h3" variant="plum">
+    <Window title={title} titleAs="h2" variant="plum">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <PlayerLink user={card.chip} className="text-lg" />
@@ -66,7 +66,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <Link href="/mod/reports" className="w-fit text-[15px] font-semibold underline underline-offset-2">
+        <Link href="/mod/reports" className="inline-flex min-h-6 w-fit items-center text-[15px] font-semibold underline underline-offset-2">
           Back to the queue
         </Link>
         <div className="flex flex-wrap items-center gap-3">

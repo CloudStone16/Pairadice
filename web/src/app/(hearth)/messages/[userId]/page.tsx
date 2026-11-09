@@ -49,7 +49,7 @@ export default async function ThreadPage({ params }: { params: Promise<Params> }
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-center gap-4">
-        <Avatar userId={id} size={64} status={can.can ? other.presence : undefined} />
+        <Avatar userId={id} size={64} status={can.can ? other.presence : undefined} statusText={false} />
         <div className="min-w-0 flex-1 leading-tight">
           <h1 className="font-display text-3xl font-bold [overflow-wrap:anywhere] [text-shadow:0_2px_0_var(--color-ink)]">
             {other.display_name}

@@ -4,6 +4,7 @@ import { Avatar, Window } from "@/components/ui";
 import { formatStamp } from "@/lib/format";
 import type { DmThread } from "@/lib/types";
 import { EmptyState } from "./EmptyState";
+import { PresenceLabel } from "./PresenceLabel";
 
 export function RecentDms({ threads, timeZone }: { threads: DmThread[]; timeZone: string }) {
   return (
@@ -16,7 +17,7 @@ export function RecentDms({ threads, timeZone }: { threads: DmThread[]; timeZone
         <ul role="list" className="divide-y divide-lavender/15">
           {threads.map((t) => (
             <li key={t.other_id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-              <Avatar userId={t.other_id} size={32} status={t.other_presence} />
+              <Avatar userId={t.other_id} size={32} status={t.other_presence} statusText={false} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <Link
@@ -27,6 +28,7 @@ export function RecentDms({ threads, timeZone }: { threads: DmThread[]; timeZone
                   </Link>
                   <span className="shrink-0 text-sm text-lavender">{formatStamp(t.sent_at, timeZone)}</span>
                 </div>
+                {t.other_presence === "unavailable" ? <PresenceLabel presence="unavailable" className="text-lavender" /> : null}
                 {t.is_deleted || t.content === null ? (
                   <p className="text-sm italic text-lavender">message removed</p>
                 ) : (

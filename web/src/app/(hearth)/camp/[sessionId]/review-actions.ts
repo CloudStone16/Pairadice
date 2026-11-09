@@ -2,8 +2,9 @@
 
 // Review action. Field names: src/lib/chat/types.ts (writeReview). Plain form post works without JS.
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth/guards";
-import { writeReview as write } from "@/lib/mutations/review";
+import { getPendingReviews, writeReview as write } from "@/lib/mutations/review";
 import { validateReview } from "@/lib/review/validate";
 import type { ChatFormState } from "@/lib/chat/types";
 
@@ -31,5 +32,8 @@ export async function writeReview(_prev: ChatFormState, formData: FormData): Pro
   if (!res.ok) return { status: "error", message: res.message, values: raw };
   revalidatePath(`/camp/${checked.value.sessionId}`);
   revalidatePath("/character");
+  // the last teammate's form disappears with the panel, so carry the thanks to the camp page instead
+  const left = await getPendingReviews(viewer, checked.value.sessionId);
+  if (left.length === 0) redirect(`/camp/${checked.value.sessionId}?rated=1`);
   return { status: "sent", message: "Thanks for the review." };
 }

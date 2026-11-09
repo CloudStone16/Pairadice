@@ -214,6 +214,7 @@ export function ChatRoom({
         <div
           ref={scroller}
           onScroll={onScroll}
+          role="region"
           tabIndex={0}
           aria-label={kind === "session" ? "Chat history" : "Conversation"}
           className="max-h-[60vh] overflow-y-auto overscroll-contain rounded-frame pr-1"

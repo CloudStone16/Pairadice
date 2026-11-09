@@ -2,6 +2,8 @@
 // so client components may import these types).
 
 export type Presence = "online" | "away" | "suspended";
+/** Presence in the DM inbox: partners who are suspended or banned read as unavailable. */
+export type DmPresence = Presence | "unavailable";
 export type SessionStatus = "open" | "full" | "in_progress" | "completed" | "cancelled";
 export type ParticipantStatus = "requested" | "accepted" | "declined" | "left" | "kicked";
 
@@ -76,7 +78,7 @@ export interface DmThread {
   other_id: number;
   other_username: string;
   other_display_name: string;
-  other_presence: Presence;
+  other_presence: DmPresence;
   sent_by_me: boolean;
   /** null when the message was removed. */
   content: string | null;

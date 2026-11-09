@@ -4,7 +4,7 @@ import { readCtx, type ViewerRef } from "@/lib/read-login";
 import { CHAT_LIMITS, type ChatLine, type DmLine } from "@/lib/chat/types";
 import { chatLineFromRow, dmLineFromRow, toIso, type ChatRowRaw, type DmRowRaw } from "@/lib/chat/lines";
 import { bool, str } from "@/lib/sql-parts";
-import type { DmThread, Presence } from "@/lib/types";
+import type { DmPresence, DmThread } from "@/lib/types";
 
 /** True for a database refusal (SQLSTATE 45000). */
 export function isRefusal(err: unknown): err is { sqlMessage: string } {
@@ -63,7 +63,8 @@ export async function getDmInbox(ref: ViewerRef): Promise<DmThread[]> {
   }
   return rows.map((r) => {
     const deleted = bool(r.is_deleted);
-    const presence: Presence = r.other_presence === "online" ? "online" : "away";
+    // sp_dm_inbox reports suspended and banned partners as offline: show those as unavailable, not away
+    const presence: DmPresence = r.other_presence === "online" ? "online" : r.other_presence === "offline" ? "unavailable" : "away";
     return {
       message_id: Number(r.message_id),
       other_id: Number(r.other_id),

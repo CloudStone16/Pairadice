@@ -83,7 +83,8 @@ export function ActionForm({
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {confirming && confirmLabel ? (
-          <PendingButton type="submit" name="confirm" value="yes" size={size} variant="red" pending={pending} pendingLabel={pendingLabel}>
+          // the submit button it replaces had focus: keep keyboard users on the decision
+          <PendingButton autoFocus type="submit" name="confirm" value="yes" size={size} variant="red" pending={pending} pendingLabel={pendingLabel}>
             <Sprite name="icon-warning" />
             {confirmLabel}
           </PendingButton>

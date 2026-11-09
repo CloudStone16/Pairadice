@@ -74,7 +74,7 @@ export default async function HearthPage() {
           {/* floorboards; the text above never sits on the tile */}
           <div aria-hidden="true" className="relative h-10 border-t-4 border-ink bg-plank">
             <Sprite
-              name="mascot-cat"
+              name="mascot-cat-wave"
               scale={3}
               className="absolute bottom-[calc(100%-10px)] right-6 motion-safe:animate-float"
             />

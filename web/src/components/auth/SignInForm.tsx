@@ -45,7 +45,7 @@ export function SignInForm({
           // a plain link (full navigation): the route handler redirects off-site, so no client router
           <a
             href={next ? `/auth/discord?next=${encodeURIComponent(next)}` : "/auth/discord"}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded border-2 border-wood/60 px-4 py-2 font-display font-bold text-ink hover:bg-wood/10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-lilac"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded border-2 border-wood/60 px-4 py-2 font-display font-bold text-ink hover:bg-wood/10"
           >
             <Sprite name="icon-discord" />
             Continue with Discord

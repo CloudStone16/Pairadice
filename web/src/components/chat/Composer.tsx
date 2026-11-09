@@ -143,12 +143,13 @@ export function Composer({
           {pending ? "Sending..." : "Send"}
         </PendingButton>
       </div>
-      {hydrated && pickerOpen ? (
+      {hydrated ? (
         <ul
           id={`${id}-emotes`}
           aria-label="Emotes"
+          hidden={!pickerOpen}
           onKeyDown={onPickerKeyDown}
-          className="mt-2 flex flex-wrap gap-2"
+          className="mt-2 flex flex-wrap gap-2 [&[hidden]]:hidden"
         >
           {(Object.keys(EMOTES) as EmoteToken[]).map((token) => (
             <li key={token}>

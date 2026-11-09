@@ -9,7 +9,7 @@ import { PartySeats } from "@/components/hearth/PartySeats";
 import { SignInGate } from "@/components/hearth/SignInGate";
 import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { InviteBox } from "@/components/camp/InviteBox";
-import { RatePartyPanel } from "@/components/review/RatePartyPanel";
+import { RatePartyPanel, RatedNotice } from "@/components/review/RatePartyPanel";
 import { getViewer, hasRole } from "@/lib/auth/guards";
 import { markRecommendationOutcome } from "@/lib/recommend";
 import {
@@ -60,10 +60,10 @@ export default async function CampPage({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ reported?: string | string[] }>;
+  searchParams: Promise<{ reported?: string | string[]; rated?: string | string[] }>;
 }) {
   const { sessionId } = await params;
-  const { reported } = await searchParams;
+  const { reported, rated } = await searchParams;
   const id = parseId(sessionId);
   if (id === null) notFound();
 
@@ -110,6 +110,7 @@ export default async function CampPage({
   return (
     <div className="flex flex-col gap-10">
       <ReportedNotice show={isReported(reported)} />
+      <RatedNotice show={isReported(rated)} />
       <CampBanner
         camp={camp}
         role={role}
