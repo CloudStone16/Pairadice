@@ -20,6 +20,7 @@ ASSUME_YES=0
 START_SERVER=0
 APP_USER=""
 WEB_USER=""
+SOCKET_LOGINS_FOR=""
 
 usage() {
   cat <<EOF
@@ -44,6 +45,10 @@ What to load:
       --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
       --web-user NAME   also create a READ-ONLY login NAME@localhost with the pairadice_web_ro role
                         (for the web app; prompts for a password; needs RBAC)
+      --socket-logins OSUSER
+                        also create passwordless per-role logins for local development, mapped to
+                        the operating-system user OSUSER (auth_socket): pd_web_sock, pd_auth_sock,
+                        pd_player_sock, pd_mod_sock, pd_admin_sock (needs RBAC)
 
 Other:
       --start-server    try to start a local MySQL server if it is not running
@@ -86,6 +91,7 @@ while [[ $# -gt 0 ]]; do
     --samples)       RUN_SAMPLES=1; shift ;;
     --app-user)      APP_USER="${2:?missing value for $1}"; shift 2 ;;
     --web-user)      WEB_USER="${2:?missing value for $1}"; shift 2 ;;
+    --socket-logins) SOCKET_LOGINS_FOR="${2:?missing value for $1}"; shift 2 ;;
     --start-server)  START_SERVER=1; shift ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
     --help)          usage; exit 0 ;;
@@ -99,6 +105,8 @@ done
   || die "--web-user must be 1-32 letters, digits or underscores"
 [[ -z "$APP_USER" || "$APP_USER" != "$WEB_USER" ]] \
   || die "--app-user and --web-user must be different logins."
+[[ "$SOCKET_LOGINS_FOR" =~ ^[a-z_][a-z0-9_-]{0,31}$ || -z "$SOCKET_LOGINS_FOR" ]] \
+  || die "--socket-logins takes an operating-system user name"
 
 # ---------------------------------------------------------------- prerequisites
 command -v mysql >/dev/null 2>&1 \
@@ -211,6 +219,24 @@ GRANT 'pairadice_player' TO '${APP_USER}'@'localhost';
 SET DEFAULT ROLE 'pairadice_player' TO '${APP_USER}'@'localhost';
 SQL
   unset app_pw app_pw2 app_pw_sql
+fi
+
+# ---------------------------------------------------------------- optional local socket logins
+# One passwordless login per role, so the web app can connect as a different MySQL user depending on
+# who is signed in (the database enforces the roles). auth_socket only admits the given OS user.
+if [[ -n "$SOCKET_LOGINS_FOR" ]]; then
+  [[ "$RBAC" -eq 1 ]] || die "--socket-logins needs the roles from 04_rbac.sql (remove --no-rbac)."
+  step "Creating socket logins for OS user '${SOCKET_LOGINS_FOR}'"
+  for pair in pd_web_sock:pairadice_web_ro pd_auth_sock:pairadice_auth pd_player_sock:pairadice_player \
+              pd_mod_sock:pairadice_moderator pd_admin_sock:pairadice_admin; do
+    login="${pair%%:*}"; role="${pair##*:}"
+    run_mysql <<SQL >/dev/null || die "could not create login ${login} (needs CREATE USER and ROLE_ADMIN)."
+CREATE USER IF NOT EXISTS '${login}'@'localhost' IDENTIFIED WITH auth_socket AS '${SOCKET_LOGINS_FOR}';
+GRANT '${role}' TO '${login}'@'localhost';
+SET DEFAULT ROLE '${role}' TO '${login}'@'localhost';
+SQL
+    printf '    %-15s -> %s\n' "$login" "$role"
+  done
 fi
 
 # ---------------------------------------------------------------- optional read-only web login
