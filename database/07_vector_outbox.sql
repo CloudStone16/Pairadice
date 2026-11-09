@@ -22,7 +22,10 @@ DROP TRIGGER IF EXISTS trg_profile_mode_ai_vec;
 DROP TRIGGER IF EXISTS trg_profile_mode_au_vec;
 DROP TRIGGER IF EXISTS trg_profile_mode_ad_vec;
 DROP TRIGGER IF EXISTS trg_profile_role_ai_vec;
+DROP TRIGGER IF EXISTS trg_profile_role_au_vec;
 DROP TRIGGER IF EXISTS trg_profile_role_ad_vec;
+DROP TRIGGER IF EXISTS trg_platform_account_au_vec;
+DROP TRIGGER IF EXISTS trg_platform_account_ad_vec;
 DROP TRIGGER IF EXISTS trg_session_ai_vec;
 DROP TRIGGER IF EXISTS trg_session_au_vec;
 DROP TRIGGER IF EXISTS trg_session_tag_ai_vec;
@@ -32,6 +35,7 @@ DROP TRIGGER IF EXISTS trg_session_language_ad_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_ai_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_au_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_ad_vec;
+DROP VIEW IF EXISTS v_outbox_dead;
 
 DELIMITER $$
 
@@ -91,8 +95,25 @@ CREATE TRIGGER trg_profile_mode_ad_vec AFTER DELETE ON profile_mode FOR EACH ROW
 
 CREATE TRIGGER trg_profile_role_ai_vec AFTER INSERT ON profile_role FOR EACH ROW
   CALL sp_vec_enqueue_profile(NEW.profile_id)$$
+CREATE TRIGGER trg_profile_role_au_vec AFTER UPDATE ON profile_role FOR EACH ROW
+BEGIN                                                        -- preference_order / game_role_id change the 'plays <roles>' text
+  CALL sp_vec_enqueue_profile(NEW.profile_id);
+  IF OLD.profile_id <> NEW.profile_id THEN CALL sp_vec_enqueue_profile(OLD.profile_id); END IF;
+END$$
 CREATE TRIGGER trg_profile_role_ad_vec AFTER DELETE ON profile_role FOR EACH ROW
   CALL sp_vec_enqueue_profile(OLD.profile_id)$$
+
+-- platform_ids is a filter field (not embedded text), so these only trigger a cheap refresh.
+-- player_game_profile.platform_account_id is ON DELETE SET NULL: FK actions fire no triggers, so cover the delete here
+CREATE TRIGGER trg_platform_account_ad_vec AFTER DELETE ON platform_account FOR EACH ROW
+  CALL sp_vec_enqueue('player', OLD.user_id, 'upsert')$$
+CREATE TRIGGER trg_platform_account_au_vec AFTER UPDATE ON platform_account FOR EACH ROW
+BEGIN
+  IF NOT (NEW.platform_id <=> OLD.platform_id AND NEW.user_id <=> OLD.user_id) THEN
+    CALL sp_vec_enqueue('player', NEW.user_id, 'upsert');
+    IF OLD.user_id <> NEW.user_id THEN CALL sp_vec_enqueue('player', OLD.user_id, 'upsert'); END IF;
+  END IF;
+END$$
 
 -- ============================================================ session embedding sources
 CREATE TRIGGER trg_session_ai_vec AFTER INSERT ON lfg_session FOR EACH ROW
@@ -127,3 +148,14 @@ CREATE TRIGGER trg_session_slot_ad_vec AFTER DELETE ON session_slot FOR EACH ROW
   CALL sp_vec_enqueue('session', OLD.session_id, 'upsert')$$
 
 DELIMITER ;
+
+-- ============================================================ dead-letter view
+-- Rows the worker has given up on (it only reads attempts < max). The 5 must match the worker's
+-- max attempts (vector config OUTBOX_MAX_ATTEMPTS, default 5). A new edit to the entity resets the row.
+CREATE OR REPLACE VIEW v_outbox_dead AS
+  SELECT entity, entity_id, op, enqueued_at, attempts, last_error
+  FROM embedding_outbox
+  WHERE attempts >= 5;
+
+-- 04_rbac.sql runs before this file, so the view did not exist yet there: grant here instead.
+GRANT SELECT ON pairadice.v_outbox_dead TO 'pairadice_vec_worker';

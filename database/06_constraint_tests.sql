@@ -51,6 +51,19 @@ CALL t_expect_error('TRIGGER: friend request when blocked', "INSERT INTO friends
 CALL t_expect_error('NOT NULL: outbox row without entity', "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES (NULL, 1, 'upsert')");
 CALL t_expect_error('NOT NULL: outbox row without id',    "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES ('player', NULL, 'upsert')");
 CALL t_expect_error('PK: outbox duplicate entity row',    "INSERT INTO embedding_outbox (entity, entity_id, op) VALUES ('player', 1, 'upsert'), ('player', 1, 'delete')");
+-- Outbox behaviour (needs 07_vector_outbox.sql). Same probe pattern as below: the probe is rejected (= PASS)
+-- only when the expected outbox row exists.
+DELETE FROM embedding_outbox;
+UPDATE profile_role SET preference_order = 9 WHERE profile_id = 2 AND preference_order = 1;
+CALL t_expect_error('OUTBOX: profile_role update enqueues the player',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 2 AND op = 'upsert')");
+DELETE FROM embedding_outbox;
+DELETE FROM platform_account WHERE account_id = 3;
+CALL t_expect_error('OUTBOX: platform_account delete enqueues its user',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 1 AND op = 'upsert')");
+UPDATE embedding_outbox SET attempts = 5, last_error = 'probe' WHERE entity = 'player' AND entity_id = 1;
+CALL t_expect_error('OUTBOX: v_outbox_dead lists a row at attempts >= 5',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM v_outbox_dead WHERE entity = 'player' AND entity_id = 1 AND attempts = 5)");
 CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
 CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
 -- ---- encoding / UTC / web-role guards.
