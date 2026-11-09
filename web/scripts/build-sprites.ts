@@ -142,7 +142,7 @@ function toSvg(s: Sprite): string {
 }
 
 const GROUPS: { title: string; test: (n: string) => boolean }[] = [
-  { title: "Mascot", test: (n) => n.startsWith("dice-") },
+  { title: "Mascot", test: (n) => n.startsWith("dice-") || n.startsWith("logo-") },
   { title: "Cartridges", test: (n) => n.startsWith("cart-") },
   { title: "Avatars", test: (n) => n.startsWith("avatar-") },
   { title: "Icons", test: (n) => n.startsWith("icon-") },
