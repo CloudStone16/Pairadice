@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "B": "#4a6fc0",
+  "b": "#6a95e6",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "...kkkkkkkkkk...",
+  ".kkbbbbbbbbbbkk.",
+  ".kbbbwwbbbbbbbk.",
+  ".kkkbbbbbbbbkkk.",
+  ".kBBkkkkkkkkBBk.",
+  ".kBBBBBBBBBBBBk.",
+  ".kBBBBBBBBBBBBk.",
+  ".kkkBBBBBBBBkkk.",
+  ".kBBkkkkkkkkBBk.",
+  ".kBBBBBBBBBBBBk.",
+  ".kBBBBBBBBBBBBk.",
+  ".kkkBBBBBBBBkkk.",
+  ".kBBkkkkkkkkBBk.",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "stacked database cylinder"
+}

@@ -85,6 +85,19 @@ export const SPRITE_NAMES = [
   "role-leader",
   "role-flex",
   "role-sniper",
+  // Phase 6
+  "icon-gavel",
+  "icon-ledger",
+  "icon-ban",
+  "icon-mute",
+  "icon-scales",
+  "icon-report-queue",
+  "icon-eye-review",
+  "icon-pencil",
+  "icon-trash",
+  "icon-database",
+  "icon-vector",
+  "guild-hall-banner-32",
 ] as const;
 
 export type SpriteName = (typeof SPRITE_NAMES)[number];

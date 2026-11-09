@@ -80,6 +80,18 @@ export const SPRITES = {
   "role-leader": { size: 16 },
   "role-flex": { size: 16 },
   "role-sniper": { size: 16 },
+  "icon-gavel": { size: 16 },
+  "icon-ledger": { size: 16 },
+  "icon-ban": { size: 16 },
+  "icon-mute": { size: 16 },
+  "icon-scales": { size: 16 },
+  "icon-report-queue": { size: 16 },
+  "icon-eye-review": { size: 16 },
+  "icon-pencil": { size: 16 },
+  "icon-trash": { size: 16 },
+  "icon-database": { size: 16 },
+  "icon-vector": { size: 16 },
+  "guild-hall-banner-32": { size: 32 },
 } as const;
 
 export type BuiltSpriteName = keyof typeof SPRITES;

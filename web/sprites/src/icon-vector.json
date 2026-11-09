@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "p": "#a094d6",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  "...........kkk..",
+  "..kkk.....kwyyk.",
+  ".kwyyk..ppkyyyk.",
+  ".kyyykpp..kyyyk.",
+  ".kyyyk.....kkk..",
+  "..kkk......p....",
+  ".....p....p.....",
+  "......p...p.....",
+  "......p..p....y.",
+  ".......kkk......",
+  ".y....kwyyk.....",
+  "......kyyyk.....",
+  "......kyyyk.....",
+  ".......kkk...p..",
+  "................"
+ ],
+ "notes": "three linked stars like a tiny constellation"
+}

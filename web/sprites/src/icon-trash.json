@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "G": "#a59fbd",
+  "g": "#cfc9e0",
+  "k": "#120e1f"
+ },
+ "rows": [
+  "................",
+  "......kkkk......",
+  ".....kggggk.....",
+  "...kkkkkkkkkk...",
+  "..kggggggggggk..",
+  "...kkkkkkkkkk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kgGgggGggk...",
+  "...kkkkkkkkkk...",
+  "................"
+ ],
+ "notes": "waste bin with lid and ribs"
+}

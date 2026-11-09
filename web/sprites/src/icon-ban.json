@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#a8403b",
+  "k": "#120e1f",
+  "r": "#e8665f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "......kkkk......",
+  "....kkrrrrkk....",
+  "...krrwwwwrrk...",
+  "..krrwwwwwwrrk..",
+  ".krrrRwwwwwwrrk.",
+  "krrwrrRwwwwwwrrk",
+  "krrwwrrRwwwwwrrk",
+  "krrwwwrrRwwwwrrk",
+  "krrwwwwrrRwwwrrk",
+  "krrwwwwwrrRwwrrk",
+  "krrwwwwwwrrRwrrk",
+  ".krrwwwwwwrrrrk.",
+  "..krrwwwwwwrrk..",
+  "...krrwwwwrrk...",
+  "....kkrrrrkk....",
+  "......kkkk......"
+ ],
+ "notes": "prohibition ring with a diagonal slash"
+}

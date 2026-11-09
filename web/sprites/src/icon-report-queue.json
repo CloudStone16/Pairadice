@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "A": "#dccaa3",
+  "a": "#efe2c4",
+  "k": "#120e1f",
+  "o": "#8a5a3c",
+  "r": "#e8665f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "..........kkkkk.",
+  "..........kkrrrk",
+  "..........krrrk.",
+  "..........kkkk..",
+  "..........k.....",
+  ".....kkkkkkkkkk.",
+  ".....kAAAAAAAAk.",
+  "...kkkkkkkkkkAk.",
+  "...kaaaaaaaakAk.",
+  ".kkkkkkkkkkakAk.",
+  ".kwwwwwwwwkakAk.",
+  ".kwrroooowkakkk.",
+  ".kwwwwwwwwkak...",
+  ".kwoooooowkkk...",
+  ".kwwwwwwwwk.....",
+  ".kkkkkkkkkk....."
+ ],
+ "notes": "stack of report papers with a red flag on top"
+}

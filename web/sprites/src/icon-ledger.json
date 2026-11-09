@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#a8403b",
+  "a": "#efe2c4",
+  "k": "#120e1f",
+  "n": "#72c374",
+  "o": "#8a5a3c",
+  "r": "#e8665f"
+ },
+ "rows": [
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  ".kaaaaakkaaaaak.",
+  ".knnooakkaooook.",
+  ".kaaaaakkaaaaak.",
+  ".knnooakkaooook.",
+  ".kaaaaakkaaaaak.",
+  ".kooooakkaooook.",
+  ".kaaaaakkaaaaak.",
+  ".kooooakkaooook.",
+  ".kaaaaakkaaarak.",
+  ".kkkkkkkkaaarRk.",
+  "kkkkkkkkkkkkkkkk",
+  "kkkkkkkkkkkkkkkk",
+  "................"
+ ],
+ "notes": "open audit ledger with ruled lines, a tick mark and a red ribbon"
+}

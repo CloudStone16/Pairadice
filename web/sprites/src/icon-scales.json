@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "Y": "#c99a3a",
+  "k": "#120e1f",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "......kkkk......",
+  "......kyyk......",
+  ".kkkkkkyykkkkkk.",
+  ".kyyyyyyyyyyyyk.",
+  ".kkkkkkyykkkkkk.",
+  "..Y...kyyk...Y..",
+  "..Y...kyyk...Y..",
+  "kkkkk.kyyk.kkkkk",
+  "kYYYk.kyyk.kYYYk",
+  ".kkk..kyyk..kkk.",
+  "......kyyk......",
+  "......kyyk......",
+  "......kyyk......",
+  "....kyyyyyyk....",
+  "...kYYYYYYYYk...",
+  "...kkkkkkkkkk..."
+ ],
+ "notes": "balance scales with two pans"
+}

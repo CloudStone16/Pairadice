@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "B": "#4a6fc0",
+  "H": "#bd8458",
+  "c": "#bfe3f0",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "....kkkkkkkk....",
+  "..kkwwwwwwwwkk..",
+  ".kwwwwBBBBwwwwk.",
+  "kwwwwBBkkBBwwwwk",
+  "kwwwwBBkkBBwwwwk",
+  ".kwwwwBBBBwwwwk.",
+  "..kkwwwwwkkkkk..",
+  "....kkkkkccck...",
+  ".......kcwccck..",
+  ".......kwcBcck..",
+  ".......kcckcck..",
+  "........kccck...",
+  ".........kkk.Hk.",
+  ".............kHk",
+  "..............kH"
+ ],
+ "notes": "eye seen through a magnifying glass"
+}

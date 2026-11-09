@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kHwwHHHHHHHHOk.",
+  ".kHHHHHHHHHHHOk.",
+  ".kHHHHHHHHHHHOk.",
+  "..kkkkkkkkkkkk..",
+  "......kHHk......",
+  "......kHOk......",
+  "......kHOk......",
+  "......kHOk......",
+  "......kHOk......",
+  ".kkkkkkkkkkkkkk.",
+  ".kHHHHHHHHHHHHk.",
+  ".kOOOOOOOOOOOOk.",
+  ".kkkkkkkkkkkkkk.",
+  "................"
+ ],
+ "notes": "judge's gavel on a sound block"
+}
