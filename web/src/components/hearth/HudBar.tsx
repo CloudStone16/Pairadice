@@ -66,7 +66,7 @@ export function HudBar({ user, viewer }: { user: UserLite; viewer: HudViewer }) 
         </div>
 
         <div className="order-2 w-full lg:order-2 lg:w-auto lg:flex-1">
-          <NavTabs showGuildHall={isMod} />
+          <NavTabs showGuildHall={isMod} showVectorLab={isAdmin} />
         </div>
       </div>
       {/* wooden beam with an ember highlight; the 4px ink line below closes the HUD */}
