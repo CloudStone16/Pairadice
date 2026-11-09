@@ -130,7 +130,7 @@ done
 command -v mysql >/dev/null 2>&1 \
   || die "mysql client not found. Install MySQL first (macOS: brew install mysql, Ubuntu: sudo apt install mysql-server)."
 
-for f in 01_schema.sql 02_routines.sql 03_seed.sql 04_rbac.sql 05_sample_queries.sql 06_constraint_tests.sql 07_vector_outbox.sql 08_auth.sql 09_sessions.sql 10_social.sql 11_profiles.sql; do
+for f in 01_schema.sql 02_routines.sql 03_seed.sql 04_rbac.sql 05_sample_queries.sql 06_constraint_tests.sql 07_vector_outbox.sql 08_auth.sql 09_sessions.sql 10_social.sql 11_profiles.sql 12_moderation.sql; do
   [[ -f "$SCRIPT_DIR/$f" ]] || die "missing $SCRIPT_DIR/$f"
 done
 
@@ -210,6 +210,7 @@ load 08_auth.sql     "Creating the sign-up procedure (08_auth.sql)"
 load 09_sessions.sql "Creating the session procedures (09_sessions.sql)"
 load 10_social.sql   "Creating the friend and block procedures (10_social.sql)"
 load 11_profiles.sql "Creating the profile-editing procedures (11_profiles.sql)"
+load 12_moderation.sql "Creating the moderation procedures and expiry event (12_moderation.sql)"
 if [[ "$SEED" -eq 1 ]]; then
   load 03_seed.sql   "Loading sample data (03_seed.sql)"
   # sanity check: 'Sofía' must be stored as single-encoded UTF-8 (HEX 536F66C3AD61); a double-encoded load gives 536F66C383C2AD61

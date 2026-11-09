@@ -50,11 +50,13 @@ GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at,
 -- The same holds for profile tables (users, user_language, user_tag, platform_account, player_game_profile,
 -- profile_mode, profile_role, availability): only the sp_*profile* / sp_set_* procedures of 11_profiles.sql write them.
 -- What remains direct: chat and reviews (Phase 5 is not built yet; the triggers in 02_routines.sql enforce the
--- rules) and reports.
+-- rules). Reports go through sp_report_user.
 GRANT INSERT ON pairadice.message TO 'pairadice_player';
 GRANT INSERT ON pairadice.review  TO 'pairadice_player';
 GRANT SELECT ON pairadice.review  TO 'pairadice_player';
-GRANT INSERT ON pairadice.report  TO 'pairadice_player';
+-- (no direct INSERT on report: sp_report_user replaced it, so a forged statement cannot file a report as someone else)
+GRANT EXECUTE ON PROCEDURE pairadice.sp_report_user TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_my_reports TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_players  TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_accept_participant TO 'pairadice_player';
@@ -86,12 +88,21 @@ GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pai
 
 -- ---------------------------------------------------------------- moderator = player + moderation
 GRANT 'pairadice_player' TO 'pairadice_moderator';
-GRANT SELECT, UPDATE ON pairadice.report    TO 'pairadice_moderator';
-GRANT SELECT, INSERT ON pairadice.sanction  TO 'pairadice_moderator';
+-- Moderators read reports and sanctions directly, but every write is a procedure of 12_moderation.sql: no direct
+-- UPDATE on report, INSERT on sanction or UPDATE (is_deleted) on message (sp_claim_report, sp_resolve_report,
+-- sp_issue_sanction, sp_lift_sanction and sp_moderate_message replaced them and write the audit rows).
+GRANT SELECT         ON pairadice.report    TO 'pairadice_moderator';
+GRANT SELECT         ON pairadice.sanction  TO 'pairadice_moderator';
 GRANT SELECT         ON pairadice.audit_log TO 'pairadice_moderator';
 GRANT SELECT         ON pairadice.users     TO 'pairadice_moderator';
-GRANT UPDATE (is_deleted) ON pairadice.message TO 'pairadice_moderator';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_expire_sanctions TO 'pairadice_moderator';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_claim_report TO 'pairadice_moderator';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_resolve_report TO 'pairadice_moderator';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_issue_sanction TO 'pairadice_moderator';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_lift_sanction TO 'pairadice_moderator';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_moderate_message TO 'pairadice_moderator';
+GRANT EXECUTE ON FUNCTION  pairadice.fn_staff_rank TO 'pairadice_moderator';
+-- sp_grant_role / sp_revoke_role are not granted here: only the admin role (EXECUTE on pairadice.*) can run them.
 
 -- ---------------------------------------------------------------- admin = all data and routines in this schema, no DDL
 -- No CREATE / ALTER / DROP / TRIGGER / INDEX / GRANT OPTION: schema changes belong to the root / migration login

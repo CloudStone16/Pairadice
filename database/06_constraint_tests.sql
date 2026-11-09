@@ -377,6 +377,260 @@ CALL t_expect_msg('SOCIAL: sp_send_friend_request by a suspended actor', "CALL s
 CALL t_expect_msg('SOCIAL: sp_block_user with a NULL actor',      "CALL sp_block_user(NULL, 3)", '%account cannot do that%');
 INSERT INTO tmp_test_results SELECT 'PROC: failed procedures leave @audit_actor NULL', IF(@audit_actor IS NULL, 'PASS', 'FAIL'), NULL;
 
+-- ---- Moderation (12_moderation.sql). These procedures COMMIT, so everything created below is deleted again at
+-- the end (ids above the saved maxima) and the two users whose status moves are restored explicitly.
+SELECT IFNULL(MAX(report_id), 0)   INTO @m_r0 FROM report;
+SELECT IFNULL(MAX(sanction_id), 0) INTO @m_s0 FROM sanction;
+SELECT IFNULL(MAX(log_id), 0)      INTO @m_a0 FROM audit_log;
+SELECT IFNULL(MAX(message_id), 0)  INTO @m_m0 FROM message;
+SELECT status, trust_score INTO @m_st12, @m_ts12 FROM users WHERE user_id = 12;
+SELECT status, trust_score INTO @m_st9,  @m_ts9  FROM users WHERE user_id = 9;
+SELECT trust_score INTO @m_ts3  FROM users WHERE user_id = 3;
+SELECT trust_score INTO @m_ts11 FROM users WHERE user_id = 11;
+DROP TEMPORARY TABLE IF EXISTS m_outbox;
+CREATE TEMPORARY TABLE m_outbox AS SELECT * FROM embedding_outbox;   -- the triggers queue re-embeds; restored at the end
+
+-- refusals before anything exists
+CALL t_expect_msg('MOD: report with a NULL actor',            "CALL sp_report_user(NULL, 12, 'spam', NULL, NULL, NULL, @t_rid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('MOD: report by a suspended actor',         "CALL sp_report_user(11, 12, 'spam', NULL, NULL, NULL, @t_rid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('MOD: report yourself',                     "CALL sp_report_user(1, 1, 'spam', NULL, NULL, NULL, @t_rid)", 'You cannot report yourself.');
+CALL t_expect_msg('MOD: report an unknown player',            "CALL sp_report_user(1, 9999, 'spam', NULL, NULL, NULL, @t_rid)", 'That player does not exist.');
+CALL t_expect_msg('MOD: report with a bad category',          "CALL sp_report_user(1, 12, 'rude', NULL, NULL, NULL, @t_rid)", 'Choose a report category.');
+CALL t_expect_msg('MOD: report description over 1000',        "CALL sp_report_user(1, 12, 'spam', REPEAT('a', 1001), NULL, NULL, @t_rid)", 'The description must be 1000 characters or fewer.');
+CALL t_expect_msg('MOD: report from a session not shared',    "CALL sp_report_user(1, 3, 'spam', NULL, 3, NULL, @t_rid)", 'You and that player were not in that session together.');
+CALL t_expect_msg('MOD: report a message the target did not send', "CALL sp_report_user(2, 8, 'spam', NULL, NULL, 5, @t_rid)", 'That message cannot be attached to this report.');
+CALL t_expect_msg('MOD: report a message you cannot see',     "CALL sp_report_user(1, 3, 'spam', NULL, NULL, 9, @t_rid)", 'That message cannot be attached to this report.');
+CALL t_expect_msg('MOD: report a message that does not exist (same refusal, no probing)', "CALL sp_report_user(1, 3, 'spam', NULL, NULL, 99999, @t_rid)", 'That message cannot be attached to this report.');
+CALL t_expect_msg('MOD: claim with a NULL actor',             "CALL sp_claim_report(NULL, 1)", 'Your account cannot do that right now.');
+CALL t_expect_msg('MOD: claim as a player',                   "CALL sp_claim_report(1, 1)", 'Only moderators can handle reports.');
+CALL t_expect_msg('MOD: claim an unknown report',             "CALL sp_claim_report(9, 99999)", 'That report does not exist.');
+CALL t_expect_msg('MOD: claim a resolved report',             "CALL sp_claim_report(9, 1)", 'That report is already resolved.');
+CALL t_expect_msg('MOD: resolve an already resolved report',  "CALL sp_resolve_report(9, 1, 'dismissed', NULL)", 'That report is already resolved.');
+CALL t_expect_msg('MOD: resolve with a bad outcome',          "CALL sp_resolve_report(9, 1, 'open', NULL)", 'Choose dismissed or actioned.');
+CALL t_expect_msg('MOD: sanction by a suspended actor',       "CALL sp_issue_sanction(11, 12, 'warn', 'rude chat', NULL, NULL, @t_sid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('MOD: sanction with a NULL actor',          "CALL sp_issue_sanction(NULL, 12, 'warn', 'rude chat', NULL, NULL, @t_sid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('MOD: sanction as a player',                "CALL sp_issue_sanction(1, 12, 'warn', 'rude chat', NULL, NULL, @t_sid)", 'You are not allowed to issue sanctions.');
+CALL t_expect_msg('MOD: moderator bans',                      "CALL sp_issue_sanction(9, 12, 'ban', 'cheating', NULL, NULL, @t_sid)", 'Only admins can ban users');
+CALL t_expect_msg('MOD: sanction with a short reason',        "CALL sp_issue_sanction(9, 12, 'warn', 'ab', NULL, NULL, @t_sid)", 'Give a reason of 3 to 255 characters.');
+CALL t_expect_msg('MOD: sanction with a long reason',         "CALL sp_issue_sanction(9, 12, 'warn', REPEAT('a', 256), NULL, NULL, @t_sid)", 'Give a reason of 3 to 255 characters.');
+CALL t_expect_msg('MOD: sanction yourself',                   "CALL sp_issue_sanction(9, 9, 'warn', 'oops', NULL, NULL, @t_sid)", 'You cannot sanction yourself.');
+CALL t_expect_msg('MOD: sanction an unknown player',          "CALL sp_issue_sanction(9, 9999, 'warn', 'oops', NULL, NULL, @t_sid)", 'That player does not exist.');
+CALL t_expect_msg('MOD: moderator sanctions an admin',        "CALL sp_issue_sanction(9, 10, 'warn', 'oops', NULL, NULL, @t_sid)", 'Moderators cannot sanction staff.');
+CALL t_expect_msg('MOD: warn with an end date',               "CALL sp_issue_sanction(9, 12, 'warn', 'rude chat', UTC_TIMESTAMP() + INTERVAL 1 DAY, NULL, @t_sid)", 'A warning or ban has no end date.');
+CALL t_expect_msg('MOD: mute without an end date',            "CALL sp_issue_sanction(9, 12, 'mute', 'rude chat', NULL, NULL, @t_sid)", 'Choose when this sanction ends.');
+CALL t_expect_msg('MOD: suspend ending in the past',          "CALL sp_issue_sanction(9, 12, 'suspend', 'rude chat', UTC_TIMESTAMP() - INTERVAL 1 DAY, NULL, @t_sid)", 'The end date must be in the future.');
+CALL t_expect_msg('MOD: suspend longer than 90 days',         "CALL sp_issue_sanction(9, 12, 'suspend', 'rude chat', UTC_TIMESTAMP() + INTERVAL 91 DAY, NULL, @t_sid)", 'A sanction can last at most 90 days.');
+CALL t_expect_msg('MOD: sanction with a bad type',            "CALL sp_issue_sanction(9, 12, 'shun', 'rude chat', NULL, NULL, @t_sid)", 'Choose a sanction type.');
+CALL t_expect_msg('MOD: sanction citing an unknown report',   "CALL sp_issue_sanction(9, 12, 'warn', 'rude chat', NULL, 99999, @t_sid)", 'That report does not exist.');
+CALL t_expect_msg('MOD: sanction citing a resolved report',   "CALL sp_issue_sanction(9, 11, 'warn', 'rude chat', NULL, 1, @t_sid)", 'That report is already resolved.');
+CALL t_expect_msg('MOD: lift an unknown sanction',            "CALL sp_lift_sanction(9, 99999, 'mistake')", 'That sanction does not exist.');
+CALL t_expect_msg('MOD: lift as a player',                    "CALL sp_lift_sanction(1, 2, 'mistake')", 'You are not allowed to lift sanctions.');
+CALL t_expect_msg('MOD: lift without a reason',               "CALL sp_lift_sanction(9, 2, '  ')", 'Give a reason of 3 to 255 characters.');
+CALL t_expect_msg('MOD: hide as a player',                    "CALL sp_moderate_message(1, 4, TRUE, NULL)", 'Only moderators can hide or restore messages.');
+CALL t_expect_msg('MOD: hide an unknown message',             "CALL sp_moderate_message(9, 99999, TRUE, NULL)", 'That message does not exist.');
+CALL t_expect_msg('MOD: restore a visible message',           "CALL sp_moderate_message(9, 4, FALSE, NULL)", 'That message is already visible.');
+CALL t_expect_msg('MOD: grant a role as a moderator',         "CALL sp_grant_role(9, 1, 'moderator')", 'Only admins can change roles.');
+CALL t_expect_msg('MOD: grant an unknown role',               "CALL sp_grant_role(10, 1, 'wizard')", 'That role does not exist.');
+CALL t_expect_msg('MOD: grant a role already held',           "CALL sp_grant_role(10, 9, 'moderator')", 'That player already has that role.');
+CALL t_expect_msg('MOD: revoke the player role',              "CALL sp_revoke_role(10, 1, 'player')", 'The player role cannot be removed.');
+CALL t_expect_msg('MOD: revoke the last admin',               "CALL sp_revoke_role(10, 10, 'admin')", 'You cannot remove the last admin.');
+CALL t_expect_msg('MOD: revoke a role not held',              "CALL sp_revoke_role(10, 1, 'moderator')", 'That player does not have that role.');
+CALL t_expect_msg('MOD: revoke as a moderator',               "CALL sp_revoke_role(9, 1, 'moderator')", 'Only admins can change roles.');
+INSERT INTO tmp_test_results SELECT 'MOD: fn_staff_rank is 0 player, 1 moderator, 2 admin',
+  IF(fn_staff_rank(1) = 0 AND fn_staff_rank(9) = 1 AND fn_staff_rank(10) = 2 AND fn_staff_rank(NULL) = 0, 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'MOD: refused moderation procedures leave @audit_actor NULL', IF(@audit_actor IS NULL, 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'MOD: refused calls wrote no rows',
+  IF((SELECT COUNT(*) FROM report WHERE report_id > @m_r0) = 0 AND (SELECT COUNT(*) FROM sanction WHERE sanction_id > @m_s0) = 0
+     AND (SELECT COUNT(*) FROM audit_log WHERE log_id > @m_a0) = 0, 'PASS', 'FAIL'), NULL;
+
+-- report -> claim -> sanction (actions the report) with every audit step
+CALL sp_report_user(1, 12, 'spam', '  repeated spam  ', 1, NULL, @t_r1);
+INSERT INTO tmp_test_results SELECT 'MOD: sp_report_user files an open report and returns its id',
+  IF(EXISTS (SELECT 1 FROM report WHERE report_id = @t_r1 AND reporter_id = 1 AND reported_user_id = 12 AND status = 'open'
+               AND handled_by IS NULL AND session_id = 1 AND description = 'repeated spam'), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: duplicate open report within 24 hours', "CALL sp_report_user(1, 12, 'cheating', NULL, NULL, NULL, @t_rid)", 'You already reported this player.');
+CALL sp_report_user(1, 8, 'harassment', NULL, 1, 2, @t_r5);
+INSERT INTO tmp_test_results SELECT 'MOD: report with a visible message and a shared session is accepted',
+  IF(EXISTS (SELECT 1 FROM report WHERE report_id = @t_r5 AND message_id = 2), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: a player cannot claim a report', CONCAT('CALL sp_claim_report(1, ', @t_r1, ')'), 'Only moderators can handle reports.');
+CALL sp_report_user(9, 12, 'other', NULL, NULL, NULL, @t_r4);
+INSERT INTO message (sender_id, receiver_id, content) VALUES (9, 1, 'mod own message');
+SET @t_own = LAST_INSERT_ID();
+CALL t_expect_msg('MOD: moderator claims a report they filed', CONCAT('CALL sp_claim_report(9, ', @t_r4, ')'), 'You cannot handle a report you filed or are the subject of.');
+CALL sp_report_user(1, 9, 'other', NULL, NULL, NULL, @t_r6);
+CALL t_expect_msg('MOD: moderator claims a report about themselves', CONCAT('CALL sp_claim_report(9, ', @t_r6, ')'), 'You cannot handle a report you filed or are the subject of.');
+CALL sp_claim_report(9, @t_r1);
+INSERT INTO tmp_test_results SELECT 'MOD: claim sets reviewing and handled_by',
+  IF(EXISTS (SELECT 1 FROM report WHERE report_id = @t_r1 AND status = 'reviewing' AND handled_by = 9 AND resolved_at IS NULL), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: claim a report you already hold', CONCAT('CALL sp_claim_report(9, ', @t_r1, ')'), 'You already hold this report.');
+CALL t_expect_msg('MOD: sanction citing a report about someone else', CONCAT('CALL sp_issue_sanction(9, 8, ''warn'', ''rude chat'', NULL, ', @t_r1, ', @t_sid)'), 'That report is about a different player.');
+CALL sp_issue_sanction(9, 12, 'mute', '  spamming chat  ', UTC_TIMESTAMP() + INTERVAL 3 DAY, @t_r1, @t_mute);
+INSERT INTO tmp_test_results SELECT 'MOD: sp_issue_sanction creates the mute, actions the report and audits both',
+  IF(EXISTS (SELECT 1 FROM sanction WHERE sanction_id = @t_mute AND user_id = 12 AND sanction_type = 'mute' AND issued_by = 9 AND report_id = @t_r1 AND reason = 'spamming chat')
+     AND EXISTS (SELECT 1 FROM report WHERE report_id = @t_r1 AND status = 'actioned' AND handled_by = 9 AND resolved_at IS NOT NULL)
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'sanction' AND entity_id = CAST(@t_mute AS CHAR) AND action = 'issue' AND actor_id = 9)
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'report' AND entity_id = CAST(@t_r1 AS CHAR) AND action = 'status_change' AND actor_id = 9
+                   AND JSON_UNQUOTE(JSON_EXTRACT(new_value, '$.status')) = 'actioned'), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: resolve a report that a sanction already actioned', CONCAT('CALL sp_resolve_report(9, ', @t_r1, ', ''dismissed'', NULL)'), 'That report is already resolved.');
+INSERT INTO tmp_test_results SELECT 'MOD: before the lift the user has an active mute',
+  IF(EXISTS (SELECT 1 FROM sanction WHERE sanction_id = @t_mute AND sanction_type = 'mute' AND starts_at <= UTC_TIMESTAMP() AND ends_at > UTC_TIMESTAMP()), 'PASS', 'FAIL'), NULL;
+START TRANSACTION;
+CALL t_expect_msg('MOD: before the lift trg_message_bi refuses the muted user''s chat',
+  "INSERT INTO message (sender_id, session_id, content) VALUES (12, 1, 'muted probe')", 'Sender is muted, suspended or banned');
+ROLLBACK;
+CALL sp_lift_sanction(9, @t_mute, '  appealed  ');                -- immediately: no sleep needed
+INSERT INTO tmp_test_results SELECT 'MOD: lifting a mute ends it now and audits the reason',
+  IF(EXISTS (SELECT 1 FROM sanction WHERE sanction_id = @t_mute AND ends_at <= UTC_TIMESTAMP() + INTERVAL 1 SECOND AND ends_at > starts_at)
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'sanction' AND entity_id = CAST(@t_mute AS CHAR) AND action = 'lift' AND actor_id = 9
+                   AND JSON_UNQUOTE(JSON_EXTRACT(new_value, '$.reason')) = 'appealed'), 'PASS', 'FAIL'), NULL;
+-- ck_sn_period needs ends_at > starts_at, so a mute lifted in its own second still reads as active to trg_message_bi until
+-- the next second; only this chat probe waits for that (the status recompute no longer does).
+DO SLEEP(1.1);
+INSERT INTO message (sender_id, session_id, content) VALUES (12, 1, 'probe after lift');
+INSERT INTO tmp_test_results SELECT 'MOD: after lifting a mute the user can post in session chat',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id > @m_m0 AND sender_id = 12 AND content = 'probe after lift'), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: lift a sanction that already ended', CONCAT('CALL sp_lift_sanction(9, ', @t_mute, ', ''again'')'), 'That sanction has already ended.');
+
+-- rank rules for lifting
+CALL sp_issue_sanction(10, 12, 'mute', 'admin issued mute', UTC_TIMESTAMP() + INTERVAL 1 DAY, NULL, @t_amute);
+CALL t_expect_msg('MOD: moderator lifts a sanction an admin issued', CONCAT('CALL sp_lift_sanction(9, ', @t_amute, ', ''pardon'')'), 'You cannot lift a sanction issued by a higher-ranked staff member.');
+CALL sp_lift_sanction(10, @t_amute, 'admin lifts own');
+INSERT INTO tmp_test_results SELECT 'MOD: an admin can lift a sanction an admin issued',
+  IF(EXISTS (SELECT 1 FROM sanction WHERE sanction_id = @t_amute AND ends_at <= UTC_TIMESTAMP() + INTERVAL 1 SECOND), 'PASS', 'FAIL'), NULL;
+CALL sp_grant_role(10, 3, 'moderator');                       -- a second moderator, the target of a staff sanction
+CALL sp_issue_sanction(10, 3, 'warn', 'staff warning', NULL, NULL, @t_swarn);
+CALL t_expect_msg('MOD: moderator cannot lift a sanction on staff', CONCAT('CALL sp_lift_sanction(9, ', @t_swarn, ', ''pardon'')'), 'Moderators cannot lift sanctions on staff.');
+CALL sp_lift_sanction(10, @t_swarn, 'warning withdrawn');
+CALL sp_revoke_role(10, 3, 'moderator');
+
+-- suspend then lift restores active and the trust score
+CALL sp_issue_sanction(9, 12, 'suspend', 'repeat offender', UTC_TIMESTAMP() + INTERVAL 1 DAY, NULL, @t_susp);
+INSERT INTO tmp_test_results SELECT 'MOD: a suspension flips the user to suspended',
+  IF((SELECT status FROM users WHERE user_id = 12) = 'suspended', 'PASS', 'FAIL'), NULL;
+CALL sp_lift_sanction(9, @t_susp, 'served enough');           -- immediately: the lifted sanction is excluded from the recompute
+INSERT INTO tmp_test_results SELECT 'MOD: lifting the suspension immediately restores active, trust and an audited status change',
+  IF((SELECT status FROM users WHERE user_id = 12) = 'active' AND (SELECT trust_score FROM users WHERE user_id = 12) = @m_ts12
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'users' AND entity_id = '12' AND action = 'status_change' AND actor_id = 9
+                   AND JSON_UNQUOTE(JSON_EXTRACT(new_value, '$.status')) = 'active'), 'PASS', 'FAIL'), NULL;
+CALL sp_expire_sanctions();
+INSERT INTO tmp_test_results SELECT 'MOD: sp_expire_sanctions after a lift leaves the user active',
+  IF((SELECT status FROM users WHERE user_id = 12) = 'active', 'PASS', 'FAIL'), NULL;
+
+-- ban, suspension on top, lift rules
+CALL sp_issue_sanction(10, 12, 'ban', 'cheating', NULL, NULL, @t_ban);
+CALL sp_issue_sanction(10, 12, 'suspend', 'extra', UTC_TIMESTAMP() + INTERVAL 1 DAY, NULL, @t_susp2);
+CALL sp_lift_sanction(10, @t_susp2, 'extra not needed');
+INSERT INTO tmp_test_results SELECT 'MOD: lifting a suspension under a ban keeps the user banned',
+  IF((SELECT status FROM users WHERE user_id = 12) = 'banned', 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: moderator lifts a ban', CONCAT('CALL sp_lift_sanction(9, ', @t_ban, ', ''pardon'')'), 'Only admins can lift a ban.');
+CALL sp_lift_sanction(10, @t_ban, 'pardoned');
+INSERT INTO tmp_test_results SELECT 'MOD: admin lifting the ban restores active',
+  IF((SELECT status FROM users WHERE user_id = 12) = 'active', 'PASS', 'FAIL'), NULL;
+
+-- roles: grant and revoke with their audit rows, admin rank rules
+CALL sp_grant_role(10, 9, 'admin');
+INSERT INTO tmp_test_results SELECT 'MOD: sp_grant_role adds the role and audits the grant',
+  IF(fn_staff_rank(9) = 2 AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'user_role' AND entity_id = '9' AND action = 'grant' AND actor_id = 10), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: admin sanctions another admin', "CALL sp_issue_sanction(10, 9, 'warn', 'oops', NULL, NULL, @t_sid)", 'Admins cannot sanction another admin.');
+CALL t_expect_msg('MOD: admin revokes own admin role',  "CALL sp_revoke_role(10, 10, 'admin')", 'You cannot remove your own admin role.');
+CALL sp_revoke_role(10, 9, 'admin');
+INSERT INTO tmp_test_results SELECT 'MOD: sp_revoke_role removes the role and audits the revoke',
+  IF(fn_staff_rank(9) = 1 AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'user_role' AND entity_id = '9' AND action = 'revoke' AND actor_id = 10
+                   AND JSON_UNQUOTE(JSON_EXTRACT(old_value, '$.role')) = 'admin'), 'PASS', 'FAIL'), NULL;
+INSERT INTO user_role (user_id, role_id, assigned_by) VALUES (11, 3, 10);   -- a suspended second admin does not count
+CALL t_expect_msg('MOD: revoke an admin when no other admin is active', "CALL sp_revoke_role(10, 11, 'admin')", 'You cannot remove the last admin.');
+DELETE FROM user_role WHERE user_id = 11 AND role_id = 3;
+
+-- hold, takeover and resolve with a note
+CALL sp_report_user(2, 8, 'cheating', NULL, 3, NULL, @t_r3);
+CALL sp_claim_report(9, @t_r3);
+CALL sp_grant_role(10, 3, 'moderator');                       -- a second moderator (removed again below)
+CALL sp_report_user(2, 12, 'harassment', NULL, NULL, NULL, @t_r7);
+CALL sp_claim_report(9, @t_r7);
+CALL sp_issue_sanction(10, 12, 'warn', 'admin acts on a held report', NULL, @t_r7, @t_w7);
+INSERT INTO tmp_test_results SELECT 'MOD: sp_issue_sanction on a report held by another moderator audits the takeover',
+  IF(EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'report' AND entity_id = CAST(@t_r7 AS CHAR) AND action = 'takeover' AND actor_id = 10
+               AND JSON_EXTRACT(old_value, '$.handled_by') = 9 AND JSON_EXTRACT(new_value, '$.handled_by') = 10), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: another moderator cannot take a held report', CONCAT('CALL sp_claim_report(3, ', @t_r3, ')'), 'Another moderator already holds this report.');
+CALL sp_claim_report(10, @t_r3);
+INSERT INTO tmp_test_results SELECT 'MOD: an admin can take over a held report and it is audited',
+  IF(EXISTS (SELECT 1 FROM report WHERE report_id = @t_r3 AND status = 'reviewing' AND handled_by = 10)
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'report' AND entity_id = CAST(@t_r3 AS CHAR) AND action = 'takeover' AND actor_id = 10), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: a moderator cannot resolve a report held by another', CONCAT('CALL sp_resolve_report(9, ', @t_r3, ', ''dismissed'', NULL)'), 'Another moderator already holds this report.');
+CALL t_expect_msg('MOD: resolve note over 500 characters', CONCAT('CALL sp_resolve_report(10, ', @t_r3, ', ''dismissed'', REPEAT(''a'', 501))'), 'The note must be 500 characters or fewer.');
+CALL sp_resolve_report(10, @t_r3, 'dismissed', '  no evidence  ');
+INSERT INTO tmp_test_results SELECT 'MOD: resolve dismisses, sets resolved_at and puts the note in the status_change audit row',
+  IF(EXISTS (SELECT 1 FROM report WHERE report_id = @t_r3 AND status = 'dismissed' AND handled_by = 10 AND resolved_at IS NOT NULL)
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'report' AND entity_id = CAST(@t_r3 AS CHAR) AND action = 'status_change'
+                   AND JSON_UNQUOTE(JSON_EXTRACT(new_value, '$.status')) = 'dismissed' AND JSON_UNQUOTE(JSON_EXTRACT(new_value, '$.note')) = 'no evidence'), 'PASS', 'FAIL'), NULL;
+CALL sp_revoke_role(10, 3, 'moderator');
+
+-- message moderation
+SELECT MAX(message_id) INTO @t_m12 FROM message WHERE sender_id = 12 AND content = 'probe after lift';
+CALL t_expect_msg('MOD: hide your own message', CONCAT('CALL sp_moderate_message(9, ', @t_own, ', TRUE, NULL)'), 'You cannot moderate your own message.');
+CALL t_expect_msg('MOD: hide a message with a report about a different message and player', CONCAT('CALL sp_moderate_message(9, 4, TRUE, ', @t_r1, ')'), 'That report is about a different message.');
+CALL t_expect_msg('MOD: hide with a report you filed',   CONCAT('CALL sp_moderate_message(9, ', @t_m12, ', TRUE, ', @t_r4, ')'), 'You cannot handle a report you filed or are the subject of.');
+CALL t_expect_msg('MOD: hide with a report about you',   CONCAT('CALL sp_moderate_message(9, ', @t_m12, ', TRUE, ', @t_r6, ')'), 'You cannot handle a report you filed or are the subject of.');
+CALL sp_moderate_message(9, @t_m12, TRUE, @t_r1);
+INSERT INTO tmp_test_results SELECT 'MOD: sp_moderate_message hides a message and audits it without the text',
+  IF((SELECT is_deleted FROM message WHERE message_id = @t_m12) = 1
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'message' AND entity_id = CAST(@t_m12 AS CHAR) AND action = 'hide' AND actor_id = 9
+                   AND JSON_CONTAINS_PATH(new_value, 'one', '$.content', '$.body') = 0), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('MOD: hide a message already hidden', CONCAT('CALL sp_moderate_message(9, ', @t_m12, ', TRUE, NULL)'), 'That message is already hidden.');
+CALL sp_moderate_message(9, @t_m12, FALSE, NULL);
+INSERT INTO tmp_test_results SELECT 'MOD: sp_moderate_message restores a message and audits it',
+  IF((SELECT is_deleted FROM message WHERE message_id = @t_m12) = 0
+     AND EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0 AND entity = 'message' AND entity_id = CAST(@t_m12 AS CHAR) AND action = 'restore' AND actor_id = 9), 'PASS', 'FAIL'), NULL;
+
+-- reporter daily cap (ten reports in 24 hours)
+INSERT INTO report (reporter_id, reported_user_id, category, created_at)
+  SELECT 6, 12, 'spam', UTC_TIMESTAMP() FROM information_schema.COLUMNS LIMIT 10;
+CALL t_expect_msg('MOD: more than 10 reports in a day', "CALL sp_report_user(6, 8, 'spam', NULL, NULL, NULL, @t_rid)", 'You have sent too many reports today. Please try again tomorrow.');
+
+INSERT INTO tmp_test_results SELECT 'MOD: successful moderation procedures leave @audit_actor NULL', IF(@audit_actor IS NULL, 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'MOD: audit rows never hold hashes or message bodies',
+  IF(NOT EXISTS (SELECT 1 FROM audit_log WHERE log_id > @m_a0
+       AND (JSON_SEARCH(new_value, 'one', '%argon2%') IS NOT NULL OR JSON_SEARCH(new_value, 'one', '%probe after lift%') IS NOT NULL
+         OR JSON_SEARCH(new_value, 'one', '%mod own message%') IS NOT NULL
+         OR JSON_SEARCH(old_value, 'one', '%argon2%') IS NOT NULL OR JSON_SEARCH(old_value, 'one', '%probe after lift%') IS NOT NULL
+         OR JSON_SEARCH(old_value, 'one', '%mod own message%') IS NOT NULL
+         OR JSON_CONTAINS_PATH(new_value, 'one', '$.content', '$.body', '$.password_hash', '$.token_hash') = 1
+         OR JSON_CONTAINS_PATH(old_value, 'one', '$.content', '$.body', '$.password_hash', '$.token_hash') = 1)), 'PASS', 'FAIL'), NULL;
+
+START TRANSACTION;                                            -- t_probe's duplicate-key INSERT mixes InnoDB and the MEMORY result table outside one
+-- grant probes: the four direct grants are gone, the procedures are granted to the right roles only
+CALL t_probe('RBAC: pairadice_player has no INSERT on report',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_player') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'report' AND PRIVILEGE_TYPE = 'INSERT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'report' AND PRIVILEGE_TYPE = 'INSERT')");
+CALL t_probe('RBAC: pairadice_moderator has no INSERT on sanction and no UPDATE on report, but can read both',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_moderator') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME IN ('sanction', 'report') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE')) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND ((TABLE_NAME = 'sanction' AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE')) OR (TABLE_NAME = 'report' AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE')))) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'sanction' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'report' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_probe('RBAC: pairadice_moderator has no UPDATE on message.is_deleted',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_moderator') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'message' AND PRIVILEGE_TYPE = 'UPDATE') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'message' AND PRIVILEGE_TYPE = 'UPDATE')");
+CALL t_probe('RBAC: pairadice_player can EXECUTE the report procedures but not the moderator ones',
+  "(SELECT COUNT(*) FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name IN ('sp_report_user', 'sp_my_reports') AND FIND_IN_SET('Execute', Proc_priv) > 0) = 2 AND NOT EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name IN ('sp_issue_sanction', 'sp_lift_sanction', 'sp_claim_report', 'sp_resolve_report', 'sp_moderate_message', 'sp_grant_role', 'sp_revoke_role'))");
+CALL t_probe('RBAC: pairadice_moderator can EXECUTE the moderation procedures but not the role procedures',
+  "(SELECT COUNT(*) FROM mysql.procs_priv WHERE User = 'pairadice_moderator' AND Routine_name IN ('sp_claim_report', 'sp_resolve_report', 'sp_issue_sanction', 'sp_lift_sanction', 'sp_moderate_message', 'sp_expire_sanctions') AND FIND_IN_SET('Execute', Proc_priv) > 0) = 6 AND NOT EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_moderator' AND Routine_name IN ('sp_grant_role', 'sp_revoke_role'))");
+ROLLBACK;
+INSERT INTO tmp_test_results SELECT 'MOD: ev_expire_sanctions is scheduled every 5 minutes',
+  IF(EXISTS (SELECT 1 FROM information_schema.EVENTS WHERE EVENT_SCHEMA = 'pairadice' AND EVENT_NAME = 'ev_expire_sanctions'
+               AND INTERVAL_VALUE = '5' AND INTERVAL_FIELD = 'MINUTE' AND EVENT_DEFINITION LIKE '%sp_expire_sanctions%'), 'PASS', 'FAIL'), NULL;
+
+-- restore everything the moderation tests created or changed
+DELETE FROM sanction  WHERE sanction_id > @m_s0;
+DELETE FROM report    WHERE report_id > @m_r0;
+DELETE FROM message   WHERE message_id > @m_m0;
+DELETE FROM user_role WHERE (user_id = 3 AND role_id = 2) OR (user_id = 9 AND role_id = 3) OR (user_id = 11 AND role_id = 3);
+UPDATE users SET status = @m_st12, trust_score = @m_ts12 WHERE user_id = 12;
+UPDATE users SET status = @m_st9,  trust_score = @m_ts9  WHERE user_id = 9;
+UPDATE users SET trust_score = @m_ts3  WHERE user_id = 3;
+UPDATE users SET trust_score = @m_ts11 WHERE user_id = 11;
+DELETE FROM embedding_outbox;                                 -- put the outbox back as it was before the moderation tests
+INSERT INTO embedding_outbox SELECT * FROM m_outbox;
+DROP TEMPORARY TABLE m_outbox;
+DELETE FROM audit_log WHERE log_id > @m_a0;
+INSERT INTO tmp_test_results SELECT 'CLEANUP: moderation test data is removed and users 9 and 12 are restored',
+  IF((SELECT COUNT(*) FROM report) = @m_r0 AND (SELECT COUNT(*) FROM sanction) = 2 AND (SELECT is_deleted FROM message WHERE message_id = 4) = 0
+     AND (SELECT status FROM users WHERE user_id = 12) = 'active' AND fn_staff_rank(3) = 0 AND fn_staff_rank(9) = 1 AND fn_staff_rank(10) = 2, 'PASS', 'FAIL'), NULL;
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
 DROP PROCEDURE t_probe;

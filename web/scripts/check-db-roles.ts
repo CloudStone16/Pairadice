@@ -48,6 +48,55 @@ const checks: Check[] = [
     sql: "DELETE FROM users WHERE 1 = 0",
     deniedErrnos: [1142],
   },
+  // Phase 6: the direct moderation grants were replaced by procedures (12_moderation.sql)
+  {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "INSERT INTO report",
+    sql: "INSERT INTO report (reporter_id, reported_user_id, category) SELECT 1, 2, 'spam' FROM DUAL WHERE 1 = 0",
+    deniedErrnos: [1142],
+  },
+  {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "CALL sp_issue_sanction",
+    sql: "CALL sp_issue_sanction(0, 0, 'warn', 'probe', NULL, NULL, @pd_probe)",
+    deniedErrnos: [1370],
+  },
+  {
+    login: "moderator",
+    userVar: "PD_DB_USER_MODERATOR",
+    pwdVar: "PD_DB_PWD_MODERATOR",
+    label: "INSERT INTO sanction",
+    sql: "INSERT INTO sanction (user_id, sanction_type, reason, issued_by) SELECT 1, 'warn', 'probe', 2 FROM DUAL WHERE 1 = 0",
+    deniedErrnos: [1142],
+  },
+  {
+    login: "moderator",
+    userVar: "PD_DB_USER_MODERATOR",
+    pwdVar: "PD_DB_PWD_MODERATOR",
+    label: "UPDATE report",
+    sql: "UPDATE report SET status = status WHERE 1 = 0",
+    deniedErrnos: [1142, 1143],
+  },
+  {
+    login: "moderator",
+    userVar: "PD_DB_USER_MODERATOR",
+    pwdVar: "PD_DB_PWD_MODERATOR",
+    label: "UPDATE message SET is_deleted",
+    sql: "UPDATE message SET is_deleted = is_deleted WHERE 1 = 0",
+    deniedErrnos: [1142, 1143],
+  },
+  {
+    login: "moderator",
+    userVar: "PD_DB_USER_MODERATOR",
+    pwdVar: "PD_DB_PWD_MODERATOR",
+    label: "CALL sp_grant_role",
+    sql: "CALL sp_grant_role(0, 0, 'player')",
+    deniedErrnos: [1370],
+  },
   {
     login: "admin",
     userVar: "PD_DB_USER_ADMIN",
@@ -59,8 +108,17 @@ const checks: Check[] = [
 ];
 
 /** A second probe per login that must SUCCEED (the login is not simply broken). */
-const allowed: Record<string, { label: string; sql: string }> = {
+const allowed: Record<string, { label: string; sql: string; okErrnos?: number[] }> = {
   admin: { label: "SELECT FROM audit_log", sql: "SELECT COUNT(*) AS n FROM audit_log" },
+};
+
+/**
+ * Procedures a login MUST be able to run. Actor 0 matches no user, so the procedure itself refuses with
+ * SQLSTATE 45000 (errno 1644); that proves EXECUTE is granted and nothing is written.
+ */
+const mayExecute: Record<string, { label: string; sql: string; okErrnos: number[] }[]> = {
+  player: [{ label: "CALL sp_report_user (runs, refused by the rules)", sql: "CALL sp_report_user(0, 0, 'spam', NULL, NULL, NULL, @pd_probe)", okErrnos: [1644] }],
+  moderator: [{ label: "CALL sp_claim_report (runs, refused by the rules)", sql: "CALL sp_claim_report(0, 0)", okErrnos: [1644] }],
 };
 
 function errnoOf(err: unknown): number | undefined {
@@ -95,13 +153,18 @@ async function expectDenied(conn: Connection, c: Check): Promise<boolean> {
   }
 }
 
-async function expectAllowed(conn: Connection, probe: { label: string; sql: string }): Promise<boolean> {
+async function expectAllowed(conn: Connection, probe: { label: string; sql: string; okErrnos?: number[] }): Promise<boolean> {
   await conn.query("START TRANSACTION");
   try {
     await conn.query(probe.sql);
     console.log(`  OK: ${probe.label} allowed`);
     return true;
   } catch (err) {
+    const errno = errnoOf(err);
+    if (errno !== undefined && probe.okErrnos?.includes(errno)) {
+      console.log(`  OK: ${probe.label} allowed (errno ${errno})`);
+      return true;
+    }
     console.log(`  FAIL: ${probe.label} should be allowed but failed with errno ${String(errnoOf(err))}`);
     return false;
   } finally {
@@ -130,6 +193,7 @@ async function runLogin(c: Check): Promise<boolean> {
     let ok = await expectDenied(conn, c);
     const extra = allowed[c.login];
     if (extra) ok = (await expectAllowed(conn, extra)) && ok;
+    for (const probe of mayExecute[c.login] ?? []) ok = (await expectAllowed(conn, probe)) && ok;
     return ok;
   } catch (err) {
     console.log(`${c.login} -> FAIL: could not connect or query (errno ${String(errnoOf(err))})`);

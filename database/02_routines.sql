@@ -112,7 +112,8 @@ BEGIN                                                        -- lift expired sus
      AND NOT EXISTS (SELECT 1 FROM sanction s
                      WHERE s.user_id = u.user_id AND s.sanction_type = 'suspend'
                        AND (s.ends_at IS NULL OR s.ends_at > UTC_TIMESTAMP()));
-  UPDATE users SET trust_score = fn_trust_score(user_id, sessions_completed, avg_rating);
+  UPDATE users SET trust_score = fn_trust_score(user_id, sessions_completed, avg_rating)
+   WHERE trust_score <> fn_trust_score(user_id, sessions_completed, avg_rating);   -- only rows that change
 END$$
 
 -- ============================================================ matching flow
