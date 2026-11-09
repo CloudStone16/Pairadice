@@ -30,9 +30,15 @@ GRANT SELECT ON pairadice.session_slot         TO 'pairadice_player';
 GRANT SELECT ON pairadice.session_language     TO 'pairadice_player';
 GRANT SELECT ON pairadice.session_tag          TO 'pairadice_player';
 GRANT SELECT ON pairadice.game_platform        TO 'pairadice_player';
-GRANT SELECT ON pairadice.player_game_profile  TO 'pairadice_player';
+-- column-level: in_game_name is deliberately NOT granted (a gamertag may be private; members see it only through DEFINER views)
+GRANT SELECT (profile_id, user_id, game_id, platform_account_id, rank_id, hours_played, is_main)
+  ON pairadice.player_game_profile TO 'pairadice_player';
 GRANT SELECT ON pairadice.user_badge           TO 'pairadice_player';
 GRANT SELECT ON pairadice.user_language        TO 'pairadice_player';
+GRANT SELECT ON pairadice.user_tag             TO 'pairadice_player';
+GRANT SELECT ON pairadice.profile_mode         TO 'pairadice_player';
+GRANT SELECT ON pairadice.profile_role         TO 'pairadice_player';
+GRANT SELECT ON pairadice.availability         TO 'pairadice_player';
 GRANT SELECT ON pairadice.message              TO 'pairadice_player';
 GRANT SELECT ON pairadice.friendship           TO 'pairadice_player';
 GRANT SELECT ON pairadice.user_block           TO 'pairadice_player';
@@ -41,6 +47,8 @@ GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at,
 -- Writes go through DEFINER procedures; the shared login cannot bypass them. Sessions, participants, friendships
 -- and blocks have NO direct INSERT / UPDATE / DELETE here (sp_create_session, sp_request_join, sp_accept_participant,
 -- sp_send_friend_request, sp_block_user ... check who is acting, so a forged statement cannot skip a rule).
+-- The same holds for profile tables (users, user_language, user_tag, platform_account, player_game_profile,
+-- profile_mode, profile_role, availability): only the sp_*profile* / sp_set_* procedures of 11_profiles.sql write them.
 -- What remains direct: chat and reviews (Phase 5 is not built yet; the triggers in 02_routines.sql enforce the
 -- rules) and reports.
 GRANT INSERT ON pairadice.message TO 'pairadice_player';
@@ -64,6 +72,15 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_remove_friend TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_block_user TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_unblock_user TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_friend_overview TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_my_profile TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_update_profile TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_set_user_languages TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_set_user_tags TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_upsert_platform_account TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_remove_platform_account TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_upsert_game_profile TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_remove_game_profile TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_set_availability TO 'pairadice_player';
 -- hybrid (SQL + vector) recommendations are logged by the API (web/src/lib/recommend.ts), and outcomes updated as the player acts
 GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pairadice_player';
 
@@ -123,7 +140,9 @@ GRANT SELECT ON pairadice.lfg_session         TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_slot        TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_language    TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_tag         TO 'pairadice_web_ro';
-GRANT SELECT ON pairadice.player_game_profile TO 'pairadice_web_ro';
+-- column-level: in_game_name is deliberately NOT granted (a gamertag may be private; members see it only through DEFINER views)
+GRANT SELECT (profile_id, user_id, game_id, platform_account_id, rank_id, hours_played, is_main)
+  ON pairadice.player_game_profile TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.user_badge          TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.badge               TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.user_language       TO 'pairadice_web_ro';

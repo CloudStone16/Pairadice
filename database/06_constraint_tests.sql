@@ -104,7 +104,7 @@ CALL t_expect_error('UTC: session time_zone is +00:00 and NOW() = UTC_TIMESTAMP(
 CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT')");
 CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
-  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME NOT IN ('users', 'player_game_profile'))");
 -- grant probes (information_schema; every one ends with an EXISTS so a missing role cannot pass vacuously)
 CALL t_probe('RBAC: pairadice_web_ro has no privilege on message, friendship or user_block, and sees lfg_session',
   "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME = 'lfg_session' AND PRIVILEGE_TYPE = 'SELECT')");
@@ -114,6 +114,15 @@ CALL t_probe('RBAC: pairadice_admin has no CREATE / ALTER / DROP / TRIGGER / IND
   "NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE IN ('CREATE', 'ALTER', 'DROP', 'TRIGGER', 'INDEX', 'REFERENCES', 'CREATE ROUTINE', 'ALTER ROUTINE', 'CREATE VIEW', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EVENT')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND IS_GRANTABLE = 'YES') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND (IS_GRANTABLE = 'YES' OR PRIVILEGE_TYPE IN ('CREATE', 'ALTER', 'DROP', 'TRIGGER'))) AND EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE') AND EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'EXECUTE')");
 CALL t_probe('RBAC: pairadice_player has no direct write on sessions, participants, friendships or blocks, but reads them',
   "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('lfg_session', 'session_participant', 'friendship', 'user_block', 'session_slot', 'session_language', 'session_tag') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('lfg_session', 'session_participant', 'friendship', 'user_block', 'session_slot', 'session_language', 'session_tag') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'lfg_session' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'friendship' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name = 'sp_request_join' AND FIND_IN_SET('Execute', Proc_priv) > 0)");
+-- grants: the shared player login may only run the procedures, never write the profile tables directly
+CALL t_probe('RBAC: pairadice_player can EXECUTE every profile procedure',
+  "(SELECT COUNT(*) FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name IN ('sp_my_profile', 'sp_update_profile', 'sp_set_user_languages', 'sp_set_user_tags', 'sp_upsert_platform_account', 'sp_remove_platform_account', 'sp_upsert_game_profile', 'sp_remove_game_profile', 'sp_set_availability') AND FIND_IN_SET('Execute', Proc_priv) > 0) = 9");
+CALL t_probe('RBAC: pairadice_player has no direct write on any profile table, but reads them',
+  "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('users', 'user_language', 'user_tag', 'platform_account', 'player_game_profile', 'profile_mode', 'profile_role', 'availability') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('users', 'user_language', 'user_tag', 'platform_account', 'player_game_profile', 'profile_mode', 'profile_role', 'availability') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE')) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'user_tag' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'availability' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_probe('RBAC: web_ro and player cannot read in_game_name, but read the rest',
+  "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE (LOCATE('pairadice_web_ro', GRANTEE) > 0 OR LOCATE('pairadice_player', GRANTEE) > 0) AND TABLE_NAME = 'player_game_profile') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE (LOCATE('pairadice_web_ro', GRANTEE) > 0 OR LOCATE('pairadice_player', GRANTEE) > 0) AND TABLE_NAME = 'player_game_profile' AND COLUMN_NAME = 'in_game_name') AND EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME = 'player_game_profile' AND COLUMN_NAME = 'rank_id' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'player_game_profile' AND COLUMN_NAME = 'user_id' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_probe('RBAC: pairadice_vec_worker keeps SELECT on the profile tables it embeds',
+  "(SELECT COUNT(*) FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_vec_worker', GRANTEE) > 0 AND TABLE_NAME IN ('users', 'user_tag', 'user_language', 'player_game_profile', 'platform_account', 'profile_mode', 'profile_role') AND PRIVILEGE_TYPE = 'SELECT') = 7");
 -- catalogue renames re-embed everything that mentions the renamed row (07_vector_outbox.sql)
 DELETE FROM embedding_outbox;
 SELECT ut.tag_id INTO @tid FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned' ORDER BY ut.tag_id LIMIT 1;
@@ -202,6 +211,161 @@ CALL t_expect_error('SOCIAL: respond to a request that is not there', "CALL sp_r
 CALL t_expect_error('SOCIAL: remove someone who is not a friend', "CALL sp_remove_friend(1, 3)");
 CALL t_expect_error('SOCIAL: block yourself',                    "CALL sp_block_user(1, 1)");
 CALL t_expect_error('SOCIAL: unblock someone not blocked',       "CALL sp_unblock_user(1, 3)");
+
+-- Profile editing (11_profiles.sql). Rules are rejected before anything is written; a user can only edit their own profile.
+CALL t_expect_msg('PROFILE: update by a suspended actor',   "CALL sp_update_profile(11, 'X', NULL, 'UTC', NULL, NULL, 'any')", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: update with a NULL actor',      "CALL sp_update_profile(NULL, 'X', NULL, 'UTC', NULL, NULL, 'any')", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: empty display name',            "CALL sp_update_profile(1, '   ', NULL, 'UTC', NULL, NULL, 'any')", '%Display name%');
+CALL t_expect_msg('PROFILE: bio over 500 characters',       "CALL sp_update_profile(1, 'Aarav', REPEAT('a', 501), 'UTC', NULL, NULL, 'any')", '%Bio must be%');
+CALL t_expect_msg('PROFILE: bad timezone',                  "CALL sp_update_profile(1, 'Aarav', NULL, 'Mars; DROP', NULL, NULL, 'any')", '%Timezone must%');
+CALL t_expect_msg('PROFILE: unknown country',               "CALL sp_update_profile(1, 'Aarav', NULL, 'UTC', 'ZZ', NULL, 'any')", '%Unknown country%');
+CALL t_expect_msg('PROFILE: unknown home region',           "CALL sp_update_profile(1, 'Aarav', NULL, 'UTC', 'IN', 99999, 'any')", '%Unknown home region%');
+CALL t_expect_msg('PROFILE: bad region strictness',         "CALL sp_update_profile(1, 'Aarav', NULL, 'UTC', 'IN', NULL, 'bogus')", '%strictness%');
+CALL t_expect_msg('PROFILE: unknown language code',         "CALL sp_set_user_languages(1, JSON_ARRAY('en', 'zz'), 'en')", '%Unknown language%');
+CALL t_expect_msg('PROFILE: no languages',                  "CALL sp_set_user_languages(1, JSON_ARRAY(), NULL)", '%at least one language%');
+CALL t_expect_msg('PROFILE: more than 8 languages',         "CALL sp_set_user_languages(1, JSON_ARRAY('en','hi','ja','fr','es','de','it','pt','ru'), 'en')", '%at most 8%');
+CALL t_expect_msg('PROFILE: main language not in the set',  "CALL sp_set_user_languages(1, JSON_ARRAY('en'), 'hi')", '%main language%');
+CALL t_expect_msg('PROFILE: oversize language array is refused before parsing', "CALL sp_set_user_languages(1, CAST(CONCAT('[', REPEAT('\"en\",', 50), '\"en\"]') AS JSON), 'en')", '%at most 8%');
+CALL t_expect_msg('PROFILE: languages that are not a list', "CALL sp_set_user_languages(1, JSON_OBJECT('a', 1), 'en')", '%at least one language%');
+CALL t_expect_msg('PROFILE: oversize tag array is refused before parsing', "CALL sp_set_user_tags(1, CAST(CONCAT('[', REPEAT('1,', 50), '1]') AS JSON))", '%at most 10%');
+CALL t_expect_msg('PROFILE: tags that are not a list', "CALL sp_set_user_tags(1, JSON_OBJECT('a', 1))", '%must be a list%');
+CALL t_expect_msg('PROFILE: oversize mode array is refused before parsing', "CALL sp_upsert_game_profile(1, 2, NULL, NULL, CAST(CONCAT('[', REPEAT('1,', 50), '1]') AS JSON), NULL)", '%at most 6 modes%');
+CALL t_expect_msg('PROFILE: 3-character country code', "CALL sp_update_profile(1, 'Aarav', NULL, 'UTC', 'IND', NULL, 'any')", '%Unknown country%');
+CALL t_expect_msg('PROFILE: timezone with an unknown area', "CALL sp_update_profile(1, 'Aarav', NULL, 'Narnia/Cair_Paravel', NULL, NULL, 'any')", '%Timezone must%');
+CALL t_expect_msg('PROFILE: over-long main language code', "CALL sp_set_user_languages(1, JSON_ARRAY('en'), 'english')", '%Unknown language%');
+CALL t_expect_msg('PROFILE: languages by a suspended actor', "CALL sp_set_user_languages(11, JSON_ARRAY('en'), 'en')", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: unknown tag',                   "CALL sp_set_user_tags(1, JSON_ARRAY(1, 99999))", '%Unknown tag%');
+CALL t_expect_msg('PROFILE: more than 10 tags',             "CALL sp_set_user_tags(1, JSON_ARRAY(1,2,3,4,5,6,7,8,9,10,11))", '%at most 10%');
+CALL t_expect_msg('PROFILE: tags by a suspended actor',     "CALL sp_set_user_tags(11, JSON_ARRAY())", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: edit another user''s platform account', "CALL sp_upsert_platform_account(1, 4, 6, 'Hijack', '', FALSE)", '%not yours%');
+CALL t_expect_msg('PROFILE: remove another user''s platform account', "CALL sp_remove_platform_account(1, 4)", '%not yours%');
+CALL t_expect_msg('PROFILE: empty gamertag',                "CALL sp_upsert_platform_account(1, NULL, 6, '  ', '', FALSE)", '%Gamertag must%');
+CALL t_expect_msg('PROFILE: unknown platform',              "CALL sp_upsert_platform_account(1, NULL, 99, 'x', '', FALSE)", '%Unknown platform%');
+CALL t_expect_msg('PROFILE: gamertag already linked (unique)', "CALL sp_upsert_platform_account(1, NULL, 6, 'PriyaGG', '#0007', FALSE)", '%already linked%');
+CALL t_expect_msg('PROFILE: platform account by a suspended actor', "CALL sp_upsert_platform_account(11, NULL, 6, 'x', '', FALSE)", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: game profile with a rank from another game', "CALL sp_upsert_game_profile(1, 2, NULL, 1, NULL, NULL)", '%rank belongs to a different game%');
+CALL t_expect_msg('PROFILE: game profile with a mode from another game', "CALL sp_upsert_game_profile(1, 2, NULL, NULL, JSON_ARRAY(1), NULL)", '%modes does not belong%');
+CALL t_expect_msg('PROFILE: game profile with a role from another game', "CALL sp_upsert_game_profile(1, 2, NULL, NULL, NULL, JSON_ARRAY(JSON_OBJECT('role_id', 1, 'order', 1)))", '%roles does not belong%');
+CALL t_expect_msg('PROFILE: more than 3 roles',             "CALL sp_upsert_game_profile(1, 2, NULL, NULL, NULL, JSON_ARRAY(JSON_OBJECT('role_id',4,'order',1), JSON_OBJECT('role_id',5,'order',2), JSON_OBJECT('role_id',6,'order',3), JSON_OBJECT('role_id',7,'order',3)))", '%at most 3 roles%');
+CALL t_expect_msg('PROFILE: two roles with the same order', "CALL sp_upsert_game_profile(1, 2, NULL, NULL, NULL, JSON_ARRAY(JSON_OBJECT('role_id',4,'order',1), JSON_OBJECT('role_id',5,'order',1)))", '%own preference order%');
+CALL t_expect_msg('PROFILE: role order outside 1-3',        "CALL sp_upsert_game_profile(1, 2, NULL, NULL, NULL, JSON_ARRAY(JSON_OBJECT('role_id',4,'order',4)))", '%order from 1 to 3%');
+CALL t_expect_msg('PROFILE: more than 6 modes',             "CALL sp_upsert_game_profile(1, 2, NULL, NULL, JSON_ARRAY(1,2,3,4,5,6,7), NULL)", '%at most 6 modes%');
+CALL t_expect_msg('PROFILE: game profile with someone else''s account', "CALL sp_upsert_game_profile(1, 2, 4, NULL, NULL, NULL)", '%not yours%');
+CALL t_expect_msg('PROFILE: game profile with an account on the wrong platform', "CALL sp_upsert_game_profile(1, 2, 2, NULL, NULL, NULL)", '%not played on%');
+CALL t_expect_msg('PROFILE: game profile for an unknown game', "CALL sp_upsert_game_profile(1, 999, NULL, NULL, NULL, NULL)", '%Unknown game%');
+CALL t_expect_msg('PROFILE: game profile by a suspended actor', "CALL sp_upsert_game_profile(11, 2, NULL, NULL, NULL, NULL)", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: remove another user''s game profile', "CALL sp_remove_game_profile(1, 2)", '%not yours%');
+CALL t_expect_msg('PROFILE: remove a game profile as a suspended actor', "CALL sp_remove_game_profile(11, 4)", '%account cannot do that%');
+CALL t_expect_msg('PROFILE: overlapping availability',      "CALL sp_set_availability(1, JSON_ARRAY(JSON_OBJECT('day',0,'start','18:00','end','20:00'), JSON_OBJECT('day',0,'start','19:30','end','21:00')))", '%cannot overlap%');
+CALL t_expect_msg('PROFILE: availability ends before it starts', "CALL sp_set_availability(1, JSON_ARRAY(JSON_OBJECT('day',0,'start','20:00','end','18:00')))", '%end after it starts%');
+CALL t_expect_msg('PROFILE: availability day 7',            "CALL sp_set_availability(1, JSON_ARRAY(JSON_OBJECT('day',7,'start','18:00','end','20:00')))", '%day from 0%');
+CALL t_expect_msg('PROFILE: availability bad time',         "CALL sp_set_availability(1, JSON_ARRAY(JSON_OBJECT('day',1,'start','25:00','end','26:00')))", '%HH:MM%');
+CALL t_expect_msg('PROFILE: more than 28 availability slots', "CALL sp_set_availability(1, CAST(CONCAT('[', REPEAT('{\"day\":0,\"start\":\"10:00\",\"end\":\"11:00\"},', 28), '{\"day\":0,\"start\":\"12:00\",\"end\":\"13:00\"}]') AS JSON))", '%At most 28%');
+CALL t_expect_msg('PROFILE: availability by a suspended actor', "CALL sp_set_availability(11, JSON_ARRAY())", '%account cannot do that%');
+
+-- Profile behaviour: valid calls write the expected rows and queue a re-embed. These procedures COMMIT, so
+-- each change is undone by an explicit restore (and the restore is itself checked).
+CREATE TEMPORARY TABLE s_users AS SELECT user_id, display_name, bio, timezone, country_code, home_region_id, region_strictness FROM users WHERE user_id = 1;
+CREATE TEMPORARY TABLE s_ul AS SELECT * FROM user_language WHERE user_id = 1;
+CREATE TEMPORARY TABLE s_ut AS SELECT * FROM user_tag WHERE user_id = 1;
+CREATE TEMPORARY TABLE s_av AS SELECT * FROM availability WHERE user_id = 1;
+CREATE TEMPORARY TABLE s_pgp AS SELECT * FROM player_game_profile WHERE profile_id = 1;
+CREATE TEMPORARY TABLE s_pm AS SELECT * FROM profile_mode WHERE profile_id = 1;
+CREATE TEMPORARY TABLE s_pr AS SELECT * FROM profile_role WHERE profile_id = 1;
+SELECT COUNT(*) INTO @n_acct FROM platform_account WHERE user_id = 1;
+SELECT COUNT(*) INTO @n_pgp FROM player_game_profile WHERE user_id = 1;
+
+DELETE FROM embedding_outbox;
+CALL sp_update_profile(1, '  Aarav P  ', '  hello there  ', 'Asia/Kolkata', 'in', NULL, 'strict');
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_update_profile trims, saves and queues a re-embed',
+  IF(EXISTS (SELECT 1 FROM users WHERE user_id = 1 AND display_name = 'Aarav P' AND bio = 'hello there' AND country_code = 'IN' AND region_strictness = 'strict' AND home_region_id IS NULL)
+     AND EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 1 AND op = 'upsert'), 'PASS', 'FAIL'), NULL;
+CALL sp_update_profile(1, 'x', '', NULL, NULL, NULL, NULL);
+INSERT INTO tmp_test_results SELECT 'PROFILE: empty bio clears, NULL timezone and strictness are kept',
+  IF(EXISTS (SELECT 1 FROM users WHERE user_id = 1 AND bio IS NULL AND timezone = 'Asia/Kolkata' AND region_strictness = 'strict' AND country_code IS NULL), 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'PROFILE: profile procedures leave @audit_actor NULL', IF(@audit_actor IS NULL, 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+CALL sp_set_user_languages(1, JSON_ARRAY('hi', 'fr'), 'fr');
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_set_user_languages replaces the set and marks the main language',
+  IF((SELECT GROUP_CONCAT(language_code ORDER BY language_code) FROM user_language WHERE user_id = 1) = 'fr,hi'
+     AND (SELECT is_preferred FROM user_language WHERE user_id = 1 AND language_code = 'fr') = 1
+     AND (SELECT COUNT(*) FROM user_language WHERE user_id = 1 AND is_preferred) = 1
+     AND EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 1), 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+CALL sp_set_user_tags(1, JSON_ARRAY(1, 2, 2));
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_set_user_tags replaces the set and de-duplicates',
+  IF((SELECT GROUP_CONCAT(tag_id ORDER BY tag_id) FROM user_tag WHERE user_id = 1) = '1,2'
+     AND EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 1), 'PASS', 'FAIL'), NULL;
+
+CALL sp_set_availability(1, JSON_ARRAY(JSON_OBJECT('day', 2, 'start', '18:00', 'end', '20:00'), JSON_OBJECT('day', 2, 'start', '20:00', 'end', '21:30')));
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_set_availability replaces the weekly slots (touching slots are allowed)',
+  IF((SELECT COUNT(*) FROM availability WHERE user_id = 1) = 2 AND EXISTS (SELECT 1 FROM availability WHERE user_id = 1 AND day_of_week = 2 AND start_time = '20:00:00' AND end_time = '21:30:00'), 'PASS', 'FAIL'), NULL;
+
+-- platform account: add, edit, link a game profile to it, remove it (profile survives, unlinked), remove the profile
+DELETE FROM embedding_outbox;
+CALL sp_upsert_platform_account(1, NULL, 3, ' ProbeTag ', NULL, TRUE);
+SELECT MAX(account_id) INTO @t_acct FROM platform_account WHERE user_id = 1;
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_upsert_platform_account adds an account',
+  IF(EXISTS (SELECT 1 FROM platform_account WHERE account_id = @t_acct AND user_id = 1 AND platform_id = 3 AND handle = 'ProbeTag' AND discriminator = '' AND is_public AND NOT is_verified), 'PASS', 'FAIL'), NULL;
+CALL sp_upsert_platform_account(1, @t_acct, 3, 'ProbeTag2', '#1', NULL);
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_upsert_platform_account edits own account (NULL is_public keeps it)',
+  IF(EXISTS (SELECT 1 FROM platform_account WHERE account_id = @t_acct AND handle = 'ProbeTag2' AND discriminator = '#1' AND is_public), 'PASS', 'FAIL'), NULL;
+CALL sp_upsert_game_profile(1, 1, @t_acct, 2, JSON_ARRAY(1, 3), JSON_ARRAY(JSON_OBJECT('role_id', 1, 'order', 1), JSON_OBJECT('role_id', 3, 'order', 2)));
+SELECT MAX(profile_id) INTO @t_prof FROM player_game_profile WHERE user_id = 1 AND game_id = 1;
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_upsert_game_profile creates a profile with its modes and roles',
+  IF(EXISTS (SELECT 1 FROM player_game_profile WHERE profile_id = @t_prof AND platform_account_id = @t_acct AND rank_id = 2)
+     AND (SELECT COUNT(*) FROM profile_mode WHERE profile_id = @t_prof) = 2
+     AND (SELECT GROUP_CONCAT(game_role_id, ':', preference_order ORDER BY preference_order) FROM profile_role WHERE profile_id = @t_prof) = '1:1,3:2'
+     AND EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = 1), 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_upsert_game_profile does not copy the gamertag into in_game_name',
+  IF(EXISTS (SELECT 1 FROM player_game_profile WHERE profile_id = @t_prof AND in_game_name IS NULL), 'PASS', 'FAIL'), NULL;
+CALL sp_upsert_game_profile(1, 1, @t_acct, NULL, JSON_ARRAY(4), NULL);
+INSERT INTO tmp_test_results SELECT 'PROFILE: a second upsert for the same game updates, not duplicates',
+  IF((SELECT COUNT(*) FROM player_game_profile WHERE user_id = 1 AND game_id = 1) = 1
+     AND (SELECT GROUP_CONCAT(mode_id) FROM profile_mode WHERE profile_id = @t_prof) = '4'
+     AND NOT EXISTS (SELECT 1 FROM profile_role WHERE profile_id = @t_prof)
+     AND (SELECT rank_id FROM player_game_profile WHERE profile_id = @t_prof) IS NULL, 'PASS', 'FAIL'), NULL;
+CALL sp_remove_platform_account(1, @t_acct);
+INSERT INTO tmp_test_results SELECT 'PROFILE: removing an account unlinks, but keeps, its game profile',
+  IF(NOT EXISTS (SELECT 1 FROM platform_account WHERE account_id = @t_acct)
+     AND EXISTS (SELECT 1 FROM player_game_profile WHERE profile_id = @t_prof AND platform_account_id IS NULL), 'PASS', 'FAIL'), NULL;
+CALL sp_remove_game_profile(1, @t_prof);
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_remove_game_profile deletes the profile with its modes',
+  IF(NOT EXISTS (SELECT 1 FROM player_game_profile WHERE profile_id = @t_prof) AND NOT EXISTS (SELECT 1 FROM profile_mode WHERE profile_id = @t_prof), 'PASS', 'FAIL'), NULL;
+
+-- update an existing profile (user 1 Valorant, profile 1), then restore it
+CALL sp_upsert_game_profile(1, 2, 1, 9, JSON_ARRAY(5), JSON_ARRAY(JSON_OBJECT('role_id', 4, 'order', 1)));
+INSERT INTO tmp_test_results SELECT 'PROFILE: sp_upsert_game_profile updates the existing (lowest id) profile',
+  IF((SELECT COUNT(*) FROM player_game_profile WHERE user_id = 1 AND game_id = 2) = 1
+     AND (SELECT rank_id FROM player_game_profile WHERE profile_id = 1) = 9
+     AND (SELECT COUNT(*) FROM profile_mode WHERE profile_id = 1) = 1 AND (SELECT COUNT(*) FROM profile_role WHERE profile_id = 1) = 1, 'PASS', 'FAIL'), NULL;
+
+INSERT INTO tmp_test_results SELECT 'PROFILE: updating an existing profile leaves in_game_name NULL',
+  IF(EXISTS (SELECT 1 FROM player_game_profile WHERE profile_id = 1 AND in_game_name IS NULL), 'PASS', 'FAIL'), NULL;
+
+-- restore user 1 exactly
+UPDATE player_game_profile p JOIN s_pgp s ON s.profile_id = p.profile_id SET p.rank_id = s.rank_id, p.platform_account_id = s.platform_account_id, p.in_game_name = s.in_game_name;
+DELETE FROM profile_mode WHERE profile_id = 1;
+DELETE FROM profile_role WHERE profile_id = 1;
+INSERT INTO profile_mode SELECT * FROM s_pm;
+INSERT INTO profile_role SELECT * FROM s_pr;
+UPDATE users u JOIN s_users s ON s.user_id = u.user_id
+   SET u.display_name = s.display_name, u.bio = s.bio, u.timezone = s.timezone, u.country_code = s.country_code,
+       u.home_region_id = s.home_region_id, u.region_strictness = s.region_strictness;
+DELETE FROM user_language WHERE user_id = 1;
+INSERT INTO user_language SELECT * FROM s_ul;
+DELETE FROM user_tag WHERE user_id = 1;
+INSERT INTO user_tag SELECT * FROM s_ut;
+DELETE FROM availability WHERE user_id = 1;
+INSERT INTO availability SELECT * FROM s_av;
+INSERT INTO tmp_test_results SELECT 'CLEANUP: user 1 profile data is restored after the profile tests',
+  IF((SELECT COUNT(*) FROM platform_account WHERE user_id = 1) = @n_acct AND (SELECT COUNT(*) FROM player_game_profile WHERE user_id = 1) = @n_pgp
+     AND (SELECT COUNT(*) FROM user_language WHERE user_id = 1) = (SELECT COUNT(*) FROM s_ul)
+     AND (SELECT COUNT(*) FROM availability WHERE user_id = 1) = (SELECT COUNT(*) FROM s_av)
+     AND (SELECT display_name FROM users WHERE user_id = 1) = (SELECT display_name FROM s_users), 'PASS', 'FAIL'), NULL;
+DROP TEMPORARY TABLE s_users, s_ul, s_ut, s_av, s_pgp, s_pm, s_pr;
 
 -- NULL and suspended actors (each is refused before anything is written)
 CALL t_expect_msg('PROC: sp_accept_participant with a NULL actor', "CALL sp_accept_participant(1, 2, NULL)", '%account cannot do that%');

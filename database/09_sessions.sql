@@ -324,7 +324,7 @@ END$$
 -- their own accounts, through this procedure, when choosing which account to host or join with.
 CREATE PROCEDURE sp_my_platform_accounts(IN p_actor_id BIGINT UNSIGNED)
 BEGIN
-  SELECT pa.account_id, pa.platform_id, p.name AS platform, pa.handle, pa.discriminator, pa.is_verified
+  SELECT pa.account_id, pa.platform_id, p.name AS platform, pa.handle, pa.discriminator, pa.is_verified, pa.is_public
     FROM platform_account pa JOIN platform p ON p.platform_id = pa.platform_id
    WHERE pa.user_id = p_actor_id
    ORDER BY p.name, pa.handle;
