@@ -9,12 +9,20 @@ import { FormAlert, authErrorItems } from "./FormAlert";
 import { PasswordField } from "./PasswordField";
 import { TextField } from "./TextField";
 
-export function SignInForm({ next }: { next?: string }) {
+export function SignInForm({
+  next,
+  discordEnabled = false,
+  discordError,
+}: {
+  next?: string;
+  discordEnabled?: boolean;
+  discordError?: string;
+}) {
   const [state, action, pending] = useActionState(signIn, initialAuthState);
   return (
     <form action={action} className="flex flex-col gap-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
-      <FormAlert message={state.message} items={authErrorItems(state.fieldErrors)} focusKey={state} />
+      <FormAlert message={state.message ?? discordError} items={authErrorItems(state.fieldErrors)} focusKey={state} />
       <TextField
         id="email"
         name="email"
@@ -33,13 +41,26 @@ export function SignInForm({ next }: { next?: string }) {
       </PendingButton>
 
       <div className="flex flex-col gap-1.5 border-t-2 border-dashed border-wood/40 pt-4">
-        <Button type="button" variant="ghost" disabled aria-describedby="discord-note" className="w-full">
-          <Sprite name="icon-discord" />
-          Continue with Discord
-        </Button>
-        <p id="discord-note" className="text-center text-[15px] text-wood-dark">
-          Discord sign-in is coming soon.
-        </p>
+        {discordEnabled ? (
+          // a plain link (full navigation): the route handler redirects off-site, so no client router
+          <a
+            href={next ? `/auth/discord?next=${encodeURIComponent(next)}` : "/auth/discord"}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded border-2 border-wood/60 px-4 py-2 font-display font-bold text-ink hover:bg-wood/10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-lilac"
+          >
+            <Sprite name="icon-discord" />
+            Continue with Discord
+          </a>
+        ) : (
+          <>
+            <Button type="button" variant="ghost" disabled aria-describedby="discord-note" className="w-full">
+              <Sprite name="icon-discord" />
+              Continue with Discord
+            </Button>
+            <p id="discord-note" className="text-center text-[15px] text-wood-dark">
+              Discord sign-in is coming soon.
+            </p>
+          </>
+        )}
       </div>
 
       <p className="text-center text-base text-ink">

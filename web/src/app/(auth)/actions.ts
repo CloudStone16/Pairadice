@@ -13,7 +13,9 @@ import {
   signInFailureLimit,
   signUpLimits,
 } from "@/lib/auth/rate-limit";
+import { clientIp } from "@/lib/auth/client-ip";
 import { safeNext } from "@/lib/auth/safe-next";
+import { validTimezone } from "@/lib/auth/timezone";
 import { SESSION_COOKIE, clearSessionCookie, revokeSession, startSession } from "@/lib/auth/session";
 import { GENERIC_ERROR, describeError, mapSignUpError } from "@/lib/auth/signup-errors";
 import type { AuthField, AuthFormState } from "@/lib/auth/form-state";
@@ -26,28 +28,6 @@ const USERNAME_RE = /^[A-Za-z0-9_]{3,32}$/;
 function text(formData: FormData, name: string): string {
   const v = formData.get(name);
   return typeof v === "string" ? v : "";
-}
-
-/**
- * The caller's address for rate limiting. Behind a proxy the RIGHT-most X-Forwarded-For entry is the one
- * the proxy added (everything left of it is client-supplied and spoofable). Without the header all
- * callers share the "local" bucket. Bounded and charset-limited so it is safe as a key.
- */
-async function clientIp(): Promise<string> {
-  const h = await headers();
-  const parts = h.get("x-forwarded-for")?.split(",") ?? [];
-  const last = parts[parts.length - 1]?.trim() ?? "";
-  return /^[0-9a-fA-F:.]{2,45}$/.test(last) ? last.toLowerCase() : "local";
-}
-
-function validTimezone(tz: string): string {
-  try {
-    if (tz.length === 0 || tz.length > 64) return "UTC";
-    new Intl.DateTimeFormat("en", { timeZone: tz }); // throws RangeError for an unknown zone
-    return tz;
-  } catch {
-    return "UTC";
-  }
 }
 
 // A real argon2id hash of a random value, so a missing account costs the same as a wrong password.

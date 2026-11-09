@@ -115,3 +115,11 @@ export function signUpLimits(ip: string): LimitSpec[] {
     { key: "signup:global", limit: 60, windowMs: AUTH_WINDOW_MS },
   ];
 }
+
+/** Discord start and callback share one set of buckets per step. */
+export function discordLimits(step: "start" | "callback", ip: string): LimitSpec[] {
+  return [
+    { key: `discord:${step}:ip:${ip}`, limit: 20, windowMs: AUTH_WINDOW_MS },
+    { key: `discord:${step}:global`, limit: 300, windowMs: AUTH_WINDOW_MS },
+  ];
+}
