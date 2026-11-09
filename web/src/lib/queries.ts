@@ -1,7 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { callProc, query, type SqlParam } from "@/lib/db";
-import { getDevUserId, isDevAuthEnabled, DEFAULT_DEV_USER_ID } from "@/lib/dev-user";
+import { getViewer } from "@/lib/auth/viewer";
+import { isDevAuthEnabled } from "@/lib/dev-user";
 import { splitList } from "@/lib/format";
 import { assignModeSlugs, type ModeRow } from "@/lib/slugs";
 import {
@@ -55,11 +56,8 @@ export const getUserById = cache(async (userId: number): Promise<UserLite | null
  * A stale dev cookie falls back to the default seed user.
  */
 export const getCurrentUser = cache(async (): Promise<UserLite | null> => {
-  const id = await getDevUserId();
-  if (id === null) return null;
-  const user = await getUserById(id);
-  if (user) return user;
-  return id === DEFAULT_DEV_USER_ID ? null : getUserById(DEFAULT_DEV_USER_ID);
+  const viewer = await getViewer();
+  return viewer ? getUserById(viewer.userId) : null;
 });
 
 /** Dev "play as" list. Empty unless dev auth is enabled. */
