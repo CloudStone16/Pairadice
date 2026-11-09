@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "Y": "#c99a3a",
+  "k": "#120e1f",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  ".kkkkkkk........",
+  "kyyyyyyyk.......",
+  "kykkkkkyk.......",
+  "kyk...kyk.......",
+  "kYk...kYk.......",
+  "kYk...kYkkkkkkk.",
+  "kYkkkkkkyyyyyyyk",
+  "kYYYYYYkykkkkkyk",
+  ".kkkkkkkyk...kyk",
+  ".......kYk...kYk",
+  ".......kYk...kYk",
+  ".......kYkkkkkYk",
+  ".......kYYYYYYYk",
+  "........kkkkkkk.",
+  "................"
+ ],
+ "notes": "two interlocked chain links"
+}

@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "P": "#dccaa3",
+  "Y": "#c99a3a",
+  "b": "#6a95e6",
+  "e": "#f2a65a",
+  "k": "#120e1f",
+  "o": "#8a5a3c"
+ },
+ "rows": [
+  "....kkkkkkkk....",
+  "....kYYYYYYk....",
+  "....kYbPPbYk....",
+  "....kYbPPbYk....",
+  "....kYeeeeYk....",
+  "...kkYeeeeYkk...",
+  "..kHkYYYYYYkOk..",
+  ".kHokkkkkkkkOOk.",
+  ".kOOOOOOOOOOOOk.",
+  "..kkOOkkkkOOkk..",
+  "...kOOkkkkOOk...",
+  "..kOOOOOOOOOOk..",
+  "..kOOkkkkkkOOk..",
+  ".kOOk......kOOk.",
+  ".kOOk......kOOk.",
+  "..kk........kk.."
+ ],
+ "notes": "portrait frame resting on the stool"
+}

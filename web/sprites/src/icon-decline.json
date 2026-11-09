@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "R": "#a8403b",
+  "k": "#120e1f",
+  "r": "#e8665f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "....kkkkkkkk....",
+  "...krrrrrrrrk...",
+  "..krrrrrrrrrrk..",
+  ".krrrrrrrrrrrrk.",
+  ".krrrrrrrrrrrrk.",
+  ".krrrwwrrwwrrrk.",
+  ".krrrrwwwwrrrRk.",
+  ".krrrrrwwrrrRRk.",
+  ".krrrrwwwwrRRRk.",
+  ".krrrwwrrwwRRRk.",
+  ".krrrrrrrRRRRRk.",
+  "..krrrrrRRRRRk..",
+  "...krrrRRRRRk...",
+  "....kkkkkkkk....",
+  "................"
+ ],
+ "notes": "red octagonal wax seal with cross"
+}

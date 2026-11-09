@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "b": "#6a95e6",
+  "g": "#72c374",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "..........k.....",
+  ".........kbk....",
+  "..kkkkkkkkbbk...",
+  ".kbwbbbbbbbbbk..",
+  ".kbbbbbbbbbbbk..",
+  "..kkkkkkkkbbk...",
+  ".....k...kbk....",
+  "....kgk...k.....",
+  "...kggkkkkkkkk..",
+  "..kgggggggwgggk.",
+  "..kgggggggggggk.",
+  "...kggkkkkkkkk..",
+  "....kgk.........",
+  ".....k..........",
+  "................"
+ ],
+ "notes": "two opposing arrows"
+}

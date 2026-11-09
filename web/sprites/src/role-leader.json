@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "O": "#5e3b27",
+  "R": "#a8403b",
+  "k": "#120e1f",
+  "r": "#e8665f",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "..kyk...........",
+  "..kOkkkkkkkkkk..",
+  "..kOrrrrrrrrrrk.",
+  "..kOrrrrrrrrrrk.",
+  "..kOrrrryrrrrk..",
+  "..kOrrryyyrrk...",
+  "..kOrrrryrrrk...",
+  "..kOrrrrrrrrrk..",
+  "..kORRRRRRRRRRk.",
+  "..kORRRRRRRRRRk.",
+  "..kOkkkkkkkkkk..",
+  "..kOk...........",
+  "..kOk...........",
+  "..kOk...........",
+  ".kOOOk..........",
+  "..kkk..........."
+ ],
+ "notes": "banner on a pole"
+}

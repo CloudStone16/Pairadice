@@ -1,0 +1,32 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "Y": "#c99a3a",
+  "b": "#6a95e6",
+  "k": "#120e1f",
+  "m": "#a59fbd",
+  "o": "#8a5a3c",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "..........kkkk..",
+  ".......kkkyyyyk.",
+  "....kkkwwwYYYYbk",
+  ".kkkYYYmmmYYYYbk",
+  "kHHHYYYmmmYYYYbk",
+  "koooYYYmmmYYYYbk",
+  ".kkkYYYmmmYYYYbk",
+  "....kkkmmmYYYYbk",
+  ".......kkkYYYYk.",
+  "..........kkkk..",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "spyglass"
+}

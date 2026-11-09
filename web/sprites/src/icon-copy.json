@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "P": "#dccaa3",
+  "k": "#120e1f",
+  "m": "#a59fbd",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  ".kkkkkkkkk......",
+  ".kPPPPPPPk......",
+  ".kPPPPPPPk......",
+  ".kPPPkkkkkkkkk..",
+  ".kPPPkwwwwwwwk..",
+  ".kPPPkwwwwwwwk..",
+  ".kPPPkwmmmmmwk..",
+  ".kPPPkwwwwwwwk..",
+  ".kPPPkwmmmmmwk..",
+  ".kPPPkwwwwwwwk..",
+  ".kkkkkwmmmmmwk..",
+  ".....kwwwwwwwk..",
+  ".....kwwwwwwwk..",
+  ".....kkkkkkkkk..",
+  "................"
+ ],
+ "notes": "two stacked sheets"
+}

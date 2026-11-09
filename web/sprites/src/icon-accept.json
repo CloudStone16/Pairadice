@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "G": "#3f8a4a",
+  "g": "#72c374",
+  "k": "#120e1f",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  ".....kkkkkk.....",
+  "....kkggggkk....",
+  "...kggggggggk...",
+  "..kggggggggggk..",
+  ".kkgggggggwggkk.",
+  ".kgggggggwwgggk.",
+  ".kggwgggwwgggGk.",
+  ".kggwwgwwgggGGk.",
+  ".kgggwwwgggGGGk.",
+  ".kkgggwgggGGGkk.",
+  "..kggggggGGGGk..",
+  "...kggggGGGGk...",
+  "....kkgGGGkk....",
+  ".....kkkkkk.....",
+  "................"
+ ],
+ "notes": "green round wax seal with check"
+}

@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "P": "#dccaa3",
+  "g": "#72c374",
+  "k": "#120e1f",
+  "p": "#efe2c4"
+ },
+ "rows": [
+  "................",
+  "..kkkkkkkkkkkk..",
+  ".kPPPPPPPPPPPPk.",
+  "..kkkkkkkkkkkk..",
+  "..kppppppppppk..",
+  "..kppppggppppk..",
+  "..kppppggppppk..",
+  "..kpggggggggpk..",
+  "..kpggggggggpk..",
+  "..kppppggppppk..",
+  "..kppppggppppk..",
+  "..kppppppppppk..",
+  "..kkkkkkkkkkkk..",
+  ".kPPPPPPPPPPPPk.",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "quest scroll with a green plus"
+}

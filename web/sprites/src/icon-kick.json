@@ -1,0 +1,30 @@
+{
+ "size": 16,
+ "palette": {
+  "H": "#bd8458",
+  "O": "#5e3b27",
+  "k": "#120e1f",
+  "m": "#a59fbd",
+  "o": "#8a5a3c",
+  "w": "#fffaf0"
+ },
+ "rows": [
+  "................",
+  "...kkkkkkk......",
+  "...kwwwwwk......",
+  "...kkkkkkk......",
+  "m..kHHHHok......",
+  "mm.kHHHHok......",
+  "m..kHHHHok......",
+  "mm.kHHHHokkk....",
+  "m..kHHHHHHHkk...",
+  "...kHHHHHHHHHk..",
+  "...kHHHHHHHHHHk.",
+  "...kOOOOOOOOOOk.",
+  "...kkkkkkkkkkkk.",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "boot with motion lines"
+}

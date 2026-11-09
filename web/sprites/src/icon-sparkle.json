@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "w": "#fffaf0",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "............k...",
+  "...........kyk..",
+  "..........kyyyk.",
+  "......kk.kyyyyyk",
+  ".....kyyk.kyyyk.",
+  ".....kyyk..kyk..",
+  "....kyyyyk..k...",
+  "..kkyywyyykk....",
+  ".kyyywwwyyyyk...",
+  ".kyyyywyyyyyk...",
+  "..kkyyyyyykk....",
+  "....kyyyyk..kk..",
+  ".....kyyk..kyyk.",
+  ".....kyyk.kyyyyk",
+  "......kk...kyyk.",
+  "............kk.."
+ ],
+ "notes": "four-point sparkle"
+}
