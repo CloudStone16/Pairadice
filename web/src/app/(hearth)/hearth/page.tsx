@@ -6,16 +6,32 @@ import { RecentDms } from "@/components/hearth/RecentDms";
 import { SignInGate } from "@/components/hearth/SignInGate";
 import { ListSkeleton } from "@/components/hearth/Skeletons";
 import { Sprite, Window } from "@/components/ui";
-import { getCurrentUser, getRecentDms, getRecommendedQuests } from "@/lib/queries";
+import { getViewer } from "@/lib/auth/viewer";
+import { getCurrentUser, getRecentDms } from "@/lib/queries";
+import { getHybridRecommendations } from "@/lib/recommend";
 
 export const metadata: Metadata = { title: "Hearth | PairADice" };
 
 /** Recommendations and recent DMs stream in behind their own Suspense boundary. */
 async function HearthFeed({ userId, timeZone }: { userId: number; timeZone: string }) {
-  const [quests, dms] = await Promise.all([getRecommendedQuests(userId), getRecentDms(userId)]);
+  const viewer = await getViewer();
+  const [quests, dms] = await Promise.all([
+    viewer
+      ? getHybridRecommendations(viewer).then((r) => r.quests).catch((err: unknown) => {
+          // A failing procedure must never take the whole site down; the UI shows its empty state.
+          console.error("[pairadice] recommendations failed:", err);
+          return [];
+        })
+      : [],
+    getRecentDms(userId),
+  ]);
   return (
     <>
       <Window title="Recommended for you" landmark>
+        <p className="mb-4 flex items-center gap-2 text-sm text-lavender">
+          <Sprite name="icon-star" />
+          Picked for you from your ranks, schedule and shared interests.
+        </p>
         {quests.length === 0 ? (
           <EmptyState title="No matches just yet" sprite="icon-scroll">
             Nothing on the board fits your ranks, region and languages right now. New quests are posted all

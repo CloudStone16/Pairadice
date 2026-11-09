@@ -166,7 +166,7 @@ export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}):
   return rows.map(toQuest);
 }
 
-async function getQuestsByIds(ids: number[]): Promise<Quest[]> {
+export async function getQuestsByIds(ids: number[]): Promise<Quest[]> {
   if (ids.length === 0) return [];
   const rows = await query<QuestRow>(`${QUEST_SELECT} WHERE s.session_id IN (?)`, [ids]);
   return rows.map(toQuest);
