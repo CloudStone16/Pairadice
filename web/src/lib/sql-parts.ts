@@ -23,35 +23,70 @@ export function presenceExpr(alias: string): string {
 export const USER_COLS = `u.user_id, u.username, u.display_name, u.timezone, u.trust_score,
   ${presenceExpr("u")} AS presence`;
 
+/** A SQL fragment plus the values for its `?` placeholders (in order). */
+export interface SqlFragment {
+  sql: string;
+  params: number[];
+}
+
 /**
- * Session visibility for a viewer (3 placeholders, all = viewer id).
- * Expects the lfg_session alias `s` in scope.
+ * Normalise a viewer id: a positive safe integer, else null ("no viewer").
+ * The anonymous "web" login must never run viewer-specific clauses, which read
+ * friendship / user_block / message tables it has no grants on.
  */
-export const VISIBLE_TO_VIEWER = `(s.visibility = 'public' OR s.host_id = ?
+export function viewerOrNull(viewerId: number | null | undefined): number | null {
+  return typeof viewerId === "number" && Number.isSafeInteger(viewerId) && viewerId > 0 ? viewerId : null;
+}
+
+/**
+ * Session visibility for a viewer. Expects the lfg_session alias `s` in scope.
+ * No viewer: public sessions only (no friendship lookup, no placeholders).
+ * Viewer: 3 placeholders (all = viewer id).
+ */
+export function visibleToViewer(viewerId: number | null): SqlFragment {
+  const v = viewerOrNull(viewerId);
+  if (v === null) return { sql: `(s.visibility = 'public')`, params: [] };
+  return {
+    sql: `(s.visibility = 'public' OR s.host_id = ?
   OR (s.visibility = 'friends' AND EXISTS (
         SELECT 1 FROM friendship f
          WHERE f.status = 'accepted'
-           AND f.pair_low = LEAST(?, s.host_id) AND f.pair_high = GREATEST(?, s.host_id))))`;
+           AND f.pair_low = LEAST(?, s.host_id) AND f.pair_high = GREATEST(?, s.host_id))))`,
+    params: [v, v, v],
+  };
+}
 
 /**
- * Whether a viewer may open a camp page (4 placeholders, all = viewer id):
- * visible to them, or they are in the roster (accepted / requested), which is
- * how invite-only camps reach their guests. Expects alias `s`.
+ * Whether a viewer may open a camp page: visible to them, or they are in the
+ * roster (accepted / requested), which is how invite-only camps reach their
+ * guests. Expects alias `s`. No viewer: public camps only. Viewer: 4 placeholders.
  */
-export const CAN_VIEW_CAMP = `(${VISIBLE_TO_VIEWER}
+export function canViewCamp(viewerId: number | null): SqlFragment {
+  const v = viewerOrNull(viewerId);
+  if (v === null) return visibleToViewer(null);
+  const vis = visibleToViewer(v);
+  return {
+    sql: `(${vis.sql}
   OR EXISTS (SELECT 1 FROM v_session_roster rv
               WHERE rv.session_id = s.session_id AND rv.user_id = ?
-                AND rv.status IN ('accepted', 'requested')))`;
+                AND rv.status IN ('accepted', 'requested')))`,
+    params: [...vis.params, v],
+  };
+}
 
 /**
  * Excludes users blocked in either direction (2 placeholders, both = viewer id).
- * `alias` is the users alias of the OTHER person.
+ * `alias` is the users alias of the OTHER person. Only for signed-in viewers:
+ * with no viewer there is nothing to filter, so callers must not call this.
  */
-export function notBlockedWith(alias: string): string {
+export function notBlockedWith(alias: string, viewerId: number): SqlFragment {
   const a = safeAlias(alias);
-  return `NOT EXISTS (SELECT 1 FROM user_block ub
+  return {
+    sql: `NOT EXISTS (SELECT 1 FROM user_block ub
           WHERE (ub.blocker_id = ? AND ub.blocked_id = ${a}.user_id)
-             OR (ub.blocker_id = ${a}.user_id AND ub.blocked_id = ?))`;
+             OR (ub.blocker_id = ${a}.user_id AND ub.blocked_id = ?))`,
+    params: [viewerId, viewerId],
+  };
 }
 
 /** Past-dated quests older than a day drop off the board (no placeholders). Expects alias `s`. */

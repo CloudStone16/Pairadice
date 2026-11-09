@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
-import { SignInGate } from "@/components/hearth/SignInGate";
+import { dbRoleFor, getViewer } from "@/lib/auth/guards";
 import {
-  getCurrentUser,
   getPlayerBadges,
   getPlayerCard,
   getPlayerGames,
@@ -25,9 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (id === null) notFound();
   let card = null;
   try {
-    const user = await getCurrentUser();
-    if (!user) return { title: "Character | PairADice" };
-    card = await getPlayerCard(id);
+    const me = await getViewer();
+    card = await getPlayerCard(id, me?.userId ?? null, dbRoleFor(me));
   } catch {
     // the page itself reports the real error; use the generic title meanwhile
     return { title: "Character | PairADice" };
@@ -41,22 +39,22 @@ export default async function CharacterPage({ params }: { params: Promise<Params
   const id = parseId(userId);
   if (id === null) notFound();
 
-  const me = await getCurrentUser();
-  if (!me) return <SignInGate />;
+  const me = await getViewer();
 
-  const [card, user, games, languages, badges] = await Promise.all([
-    getPlayerCard(id),
-    getUserById(id),
+  // The card enforces bans and blocks; nothing else about the user is fetched when it is hidden.
+  const card = await getPlayerCard(id, me?.userId ?? null, dbRoleFor(me));
+  if (!card) notFound();
+  const [user, games, languages, badges] = await Promise.all([
+    getUserById(id, dbRoleFor(me)),
     getPlayerGames(id),
     getPlayerLanguages(id),
     getPlayerBadges(id),
   ]);
-  if (!card) notFound();
   return (
     <CharacterSheet
       card={card}
       presence={user?.presence ?? "away"}
-      isSelf={me.user_id === id}
+      isSelf={me?.userId === id}
       games={games}
       languages={languages}
       badges={badges}

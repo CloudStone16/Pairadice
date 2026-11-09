@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
-import { SignInGate } from "@/components/hearth/SignInGate";
+import { dbRoleFor, getViewer, requireViewerUser } from "@/lib/auth/guards";
 import {
-  getCurrentUser,
   getPlayerBadges,
   getPlayerCard,
   getPlayerGames,
@@ -12,8 +11,8 @@ import {
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
-    const user = await getCurrentUser();
-    if (user) return { title: `${user.display_name} | PairADice` };
+    const session = await getViewer();
+    if (session) return { title: `${session.displayName} | PairADice` };
   } catch {
     // fall back to the generic title
   }
@@ -21,16 +20,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function MyCharacterPage() {
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
+  const { session, user } = await requireViewerUser("/character");
   const [card, games, languages, badges] = await Promise.all([
-    getPlayerCard(user.user_id),
+    getPlayerCard(user.user_id, user.user_id, dbRoleFor(session)),
     getPlayerGames(user.user_id),
     getPlayerLanguages(user.user_id),
     getPlayerBadges(user.user_id),
   ]);
   if (!card) notFound();
   return (
-    <CharacterSheet card={card} presence={user.presence} isSelf games={games} languages={languages} badges={badges} />
+    <CharacterSheet card={card} presence={session.status === "suspended" ? "suspended" : user.presence} isSelf games={games} languages={languages} badges={badges} />
   );
 }

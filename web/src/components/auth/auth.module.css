@@ -1,0 +1,14 @@
+/* transform-only, and finite: 5 s total, then they rest */
+@keyframes twinkle {
+  0%, 100% { transform: scale(0.7); }
+  50% { transform: scale(1.15); }
+}
+@keyframes blink {
+  0%, 60% { transform: translateX(0); }
+  80%, 100% { transform: translateX(3px); }
+}
+.twinkle { animation: twinkle 2.5s ease-in-out 2; }
+.blink { display: inline-flex; animation: blink 1.25s steps(2, end) 4; }
+@media (prefers-reduced-motion: reduce) {
+  .twinkle, .blink { animation: none; transform: none; }
+}

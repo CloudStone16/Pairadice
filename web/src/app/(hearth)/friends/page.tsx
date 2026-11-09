@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { FriendList } from "@/components/hearth/FriendList";
-import { SignInGate } from "@/components/hearth/SignInGate";
-import { getCurrentUser, getFriendLists } from "@/lib/queries";
+import { dbRoleFor, requireUser } from "@/lib/auth/guards";
+import { getFriendLists } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Friends | PairADice" };
 
 export default async function FriendsPage() {
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
-  const { accepted, incoming, outgoing } = await getFriendLists(user.user_id);
+  const session = await requireUser("/friends");
+  const { accepted, incoming, outgoing } = await getFriendLists(session.userId, dbRoleFor(session));
   return (
     <div className="flex flex-col gap-10">
       <header>

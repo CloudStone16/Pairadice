@@ -3,16 +3,17 @@ import { Suspense } from "react";
 import { EmptyState } from "@/components/hearth/EmptyState";
 import { QuestGrid } from "@/components/hearth/QuestGrid";
 import { RecentDms } from "@/components/hearth/RecentDms";
-import { SignInGate } from "@/components/hearth/SignInGate";
 import { ListSkeleton } from "@/components/hearth/Skeletons";
-import { Sprite, Window } from "@/components/ui";
-import { getCurrentUser, getRecentDms, getRecommendedQuests } from "@/lib/queries";
+import { ButtonLink, Sprite, Window } from "@/components/ui";
+import { dbRoleFor, getViewer, getViewerUser } from "@/lib/auth/guards";
+import type { DbRole } from "@/lib/db-roles";
+import { getOpenQuests, getRecentDms, getRecommendedQuests } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Hearth | PairADice" };
 
 /** Recommendations and recent DMs stream in behind their own Suspense boundary. */
-async function HearthFeed({ userId, timeZone }: { userId: number; timeZone: string }) {
-  const [quests, dms] = await Promise.all([getRecommendedQuests(userId), getRecentDms(userId)]);
+async function HearthFeed({ userId, role, timeZone }: { userId: number; role: DbRole; timeZone: string }) {
+  const [quests, dms] = await Promise.all([getRecommendedQuests(userId, role), getRecentDms(userId, role)]);
   return (
     <>
       <Window title="Recommended for you" landmark>
@@ -31,9 +32,25 @@ async function HearthFeed({ userId, timeZone }: { userId: number; timeZone: stri
   );
 }
 
+/** Signed-out visitors see what is open on the board instead of personal picks. */
+async function PublicFeed() {
+  const quests = await getOpenQuests(null, {}, "web");
+  return (
+    <Window title="Open on the board" landmark>
+      {quests.length === 0 ? (
+        <EmptyState title="The board is quiet" sprite="icon-scroll">
+          No quests are posted right now. Check back around supper time.
+        </EmptyState>
+      ) : (
+        <QuestGrid quests={quests.slice(0, 6)} timeZone="UTC" />
+      )}
+    </Window>
+  );
+}
+
 export default async function HearthPage() {
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
+  const session = await getViewer();
+  const user = await getViewerUser();
 
   return (
     <div className="flex flex-col gap-10">
@@ -48,11 +65,24 @@ export default async function HearthPage() {
 
           <div className="relative px-5 pb-28 pt-8 sm:min-h-40 sm:px-8 sm:pb-8 sm:pr-48">
             <h1 className="font-display text-3xl font-bold leading-tight [overflow-wrap:anywhere] [text-shadow:0_2px_0_var(--color-ink)]">
-              Welcome back, {user.display_name}
+              {user ? `Welcome back, ${user.display_name}` : "Find your party"}
             </h1>
             <p className="mt-1 max-w-prose text-lavender">
-              The fire is lit and the kettle is warm. Pull up a log and see who needs a fourth.
+              {user
+                ? "The fire is lit and the kettle is warm. Pull up a log and see who needs a fourth."
+                : "The fire is lit and the kettle is warm. Sign in to join a quest, or just look around."}
             </p>
+            {user ? null : (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <ButtonLink href="/signin" variant="yellow" size="sm">
+                  <Sprite name="icon-door" scale={1} />
+                  Sign in
+                </ButtonLink>
+                <ButtonLink href="/signup" variant="ghost" size="sm">
+                  Join
+                </ButtonLink>
+              </div>
+            )}
           </div>
 
           {/* floorboards; the text above never sits on the tile */}
@@ -67,7 +97,7 @@ export default async function HearthPage() {
       </Window>
 
       <Suspense fallback={<ListSkeleton />}>
-        <HearthFeed userId={user.user_id} timeZone={user.timezone} />
+        {user ? <HearthFeed userId={user.user_id} role={dbRoleFor(session)} timeZone={user.timezone} /> : <PublicFeed />}
       </Suspense>
     </div>
   );

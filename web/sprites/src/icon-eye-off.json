@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "c": "#f3ead3",
+  "b": "#6a95e6",
+  "l": "#a094d6",
+  "r": "#e8665f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "............krrk",
+  "....kkkkkkkkrrk.",
+  "..kkllllllkrrk..",
+  ".kccccbbbkrrkck.",
+  "kccccbbkkrrkccck",
+  "kccccbbkrrkcccck",
+  ".kcccckrrkcccck.",
+  "..kkckrrkccckk..",
+  "....krrkkkkk....",
+  "...krrk.........",
+  "..krrk..........",
+  ".krrk...........",
+  "................",
+  "................"
+ ],
+ "notes": "Same eye crossed by a bold 2-px red diagonal with ink edges (hide password)"
+}

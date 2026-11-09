@@ -1,0 +1,29 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "H": "#bd8458",
+  "o": "#8a5a3c",
+  "O": "#5e3b27",
+  "b": "#c99a3a"
+ },
+ "rows": [
+  "................",
+  "...kkkkkkkkkk...",
+  "...kHoooOoook...",
+  "...kHoooOoook...",
+  "...kHoooOoook...",
+  "...kOOOOOOOOk...",
+  "...kHoooOoook...",
+  "...kHoooOoook...",
+  "...kHoooOobok...",
+  "...kHoooOobok...",
+  "...kHoooOoook...",
+  "...kOOOOOOOOk...",
+  "...kHoooOoook...",
+  "...kHoooOoook...",
+  "..kkkkkkkkkkkk..",
+  "................"
+ ],
+ "notes": "Closed wooden door with plank seams, brass knob; same frame as icon-door"
+}

@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "p": "#efe2c4",
+  "d": "#dccaa3",
+  "e": "#e8665f"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  ".kkkkkkkkkkkkkk.",
+  ".kkddddddddddkk.",
+  ".kpkddddddddkpk.",
+  ".kppkddddddkppk.",
+  ".kpppkddddkpppk.",
+  ".kppppkkkkppppk.",
+  ".kpppppeepppppk.",
+  ".kppppppppppppk.",
+  ".kddddddddddddk.",
+  ".kkkkkkkkkkkkkk.",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "Parchment envelope with a V flap and a red wax seal"
+}

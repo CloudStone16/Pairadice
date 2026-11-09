@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "l": "#b4a7e8",
+  "c": "#f3ead3",
+  "p": "#352c52"
+ },
+ "rows": [
+  "................",
+  "...kkkkkkkkkk...",
+  "..kllllllllllk..",
+  ".kllllllllllllk.",
+  ".kllllllllllllk.",
+  ".klllcpcccclllk.",
+  ".kllcpppcpccllk.",
+  ".kllccpcccpcllk.",
+  ".klllcccccclllk.",
+  ".kllllllllllllk.",
+  "..kllllllllllk..",
+  "...kllkkkkkkk...",
+  "...kllk.........",
+  "...kkk..........",
+  "................",
+  "................"
+ ],
+ "notes": "Original chat bubble with a single cream game-controller silhouette (plum d-pad and two buttons); not the Discord logo"
+}

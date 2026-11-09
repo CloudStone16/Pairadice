@@ -13,6 +13,14 @@ export function isDevAuthEnabled(): boolean {
   return process.env.NODE_ENV === "development" && process.env.PAIRADICE_DEV_AUTH === "1";
 }
 
+/** Cookie value meaning "play as nobody" so the signed-out UI can be tested in dev. */
+export const DEV_SIGNED_OUT = "none";
+
+export function isDevSignedOut(raw: string | null | undefined): boolean {
+  return raw?.trim() === DEV_SIGNED_OUT;
+}
+
+/** A numeric dev user id, or null for "none" and anything malformed. */
 export function parseDevUserId(raw: string | null | undefined): number | null {
   if (raw === null || raw === undefined) return null;
   const trimmed = raw.trim();
@@ -21,9 +29,11 @@ export function parseDevUserId(raw: string | null | undefined): number | null {
   return id >= 1 && id <= 9999 ? id : null;
 }
 
-/** The dev "play as" id, or null when no identity exists (dev auth disabled). */
+/** The dev "play as" id, or null when signed out (dev auth disabled, or the cookie is "none"). */
 export async function getDevUserId(): Promise<number | null> {
   if (!isDevAuthEnabled()) return null;
   const jar = await cookies();
-  return parseDevUserId(jar.get(DEV_USER_COOKIE)?.value) ?? DEFAULT_DEV_USER_ID;
+  const raw = jar.get(DEV_USER_COOKIE)?.value;
+  if (isDevSignedOut(raw)) return null;
+  return parseDevUserId(raw) ?? DEFAULT_DEV_USER_ID;
 }

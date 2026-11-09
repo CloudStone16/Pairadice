@@ -1,15 +1,18 @@
 import Link from "next/link";
-import { Avatar, Meter, Sprite } from "@/components/ui";
+import { signOutAction } from "@/app/(auth)/actions";
+import { Avatar, Button, ButtonLink, Meter, Sprite } from "@/components/ui";
+import { hasRole } from "@/lib/auth/guards";
+import type { Session } from "@/lib/auth/session";
 import type { UserLite } from "@/lib/types";
 import { DevUserSwitch } from "./DevUserSwitch";
 import { NavTabs } from "./NavTabs";
 
 const PRESENCE_WORD = { online: "Online", away: "Away", suspended: "Suspended" } as const;
 
-export function HudBar({ user }: { user: UserLite }) {
+export function HudBar({ user, session }: { user: UserLite | null; session: Session | null }) {
   return (
     <header className="z-40 bg-dusk lg:sticky lg:top-0">
-      <DevUserSwitch currentId={user.user_id} />
+      <DevUserSwitch currentId={user?.user_id ?? null} realSession={session !== null && !session.dev} />
       <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-x-6 gap-y-0 px-4 py-1 lg:py-2">
         {/* below lg: logo and character share row one, the menu is row two. lg:order-* restores the desktop layout */}
         <div className="order-1 flex min-w-0 flex-1 flex-nowrap items-center justify-between gap-3 lg:contents">
@@ -20,11 +23,13 @@ export function HudBar({ user }: { user: UserLite }) {
             </span>
           </Link>
 
-          <Link
+          {user ? (
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-2 lg:order-3">
+                        <Link
             href="/character"
             // the name starts with the visible text ("Aarav Trust 71"), so it satisfies Label in Name (WCAG 2.5.3)
             aria-label={`${user.display_name} Trust ${user.trust_score}, ${PRESENCE_WORD[user.presence]} — your character sheet`}
-            className="order-2 ml-auto flex shrink-0 items-center gap-3 rounded-pill bg-plum p-1 ring-1 ring-lavender/40 transition-colors hover:bg-plum-2 sm:py-1.5 sm:pl-2 sm:pr-4 lg:order-3"
+            className="flex shrink-0 items-center gap-3 rounded-pill bg-plum p-1 ring-1 ring-lavender/40 transition-colors hover:bg-plum-2 sm:py-1.5 sm:pl-2 sm:pr-4"
           >
             <Avatar userId={user.user_id} size={32} status={user.presence} statusText={false} />
             <span className="hidden flex-col leading-tight sm:flex">
@@ -34,10 +39,30 @@ export function HudBar({ user }: { user: UserLite }) {
               </span>
             </span>
           </Link>
+              {session && !session.dev ? (
+                <form action={signOutAction}>
+                  <Button type="submit" variant="ghost" size="sm" aria-label="Sign out">
+                    <Sprite name="icon-door-closed" scale={1} />
+                    <span className="hidden sm:inline">Sign out</span>
+                  </Button>
+                </form>
+              ) : null}
+            </div>
+          ) : (
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-2 lg:order-3">
+              <ButtonLink href="/signin" variant="yellow" size="sm">
+                <Sprite name="icon-door" scale={1} />
+                Sign in
+              </ButtonLink>
+              <ButtonLink href="/signup" variant="ghost" size="sm">
+                Join
+              </ButtonLink>
+            </div>
+          )}
         </div>
 
         <div className="order-2 w-full lg:order-2 lg:w-auto lg:flex-1">
-          <NavTabs />
+          <NavTabs showMod={hasRole(session, "moderator")} showAdmin={hasRole(session, "admin")} />
         </div>
       </div>
       {/* wooden beam with an ember highlight; the 4px ink line below closes the HUD */}

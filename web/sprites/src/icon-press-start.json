@@ -1,0 +1,28 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "e": "#f2a65a",
+  "c": "#f3ead3",
+  "b": "#c99a3a"
+ },
+ "rows": [
+  "................",
+  "..kkkkkk........",
+  "..kceeeek.......",
+  "..kceeeeek......",
+  "..kceeeeeek.....",
+  "..kceeeeeeek....",
+  "..kceeeeeeeek...",
+  "..keeeeeeeeeek..",
+  "..keeeeeeeebk...",
+  "..keeeeeeebk....",
+  "..keeeeeebk.....",
+  "..keeeeebk......",
+  "..keeeebk.......",
+  "..kkkkkk........",
+  "................",
+  "................"
+ ],
+ "notes": "RPG menu cursor: chunky right-pointing arrow, ember with cream highlight and brass shade"
+}

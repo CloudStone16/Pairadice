@@ -1,0 +1,27 @@
+{
+ "size": 16,
+ "palette": {
+  "k": "#120e1f",
+  "b": "#c99a3a",
+  "y": "#f2c35b"
+ },
+ "rows": [
+  "................",
+  "................",
+  "................",
+  "..kkkkkk........",
+  ".kyybbbbk.......",
+  ".kybbbbbkkkkkkk.",
+  ".kyykkbbbbbbbbk.",
+  ".kybkkbbbbbbbbk.",
+  ".kbbbbbbkkkkbbk.",
+  ".kbbbbbbk..kbbk.",
+  "..kkkkkk...kkkk.",
+  "................",
+  "................",
+  "................",
+  "................",
+  "................"
+ ],
+ "notes": "Old brass key lying flat: round bow with a keyhole gap, long shaft and one tooth"
+}

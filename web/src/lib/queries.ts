@@ -1,17 +1,20 @@
 import "server-only";
 import { cache } from "react";
-import { callProc, query, type SqlParam } from "@/lib/db";
-import { getDevUserId, isDevAuthEnabled, DEFAULT_DEV_USER_ID } from "@/lib/dev-user";
+import { callProcAs, queryAs, type SqlParam } from "@/lib/db";
+import type { DbRole } from "@/lib/db-roles";
+import { isDevAuthEnabled } from "@/lib/dev-user";
+import { resolveReadRole } from "@/lib/viewer-role";
 import { splitList } from "@/lib/format";
 import { assignModeSlugs, type ModeRow } from "@/lib/slugs";
 import {
   NOT_LONG_PAST,
   USER_COLS,
-  VISIBLE_TO_VIEWER,
   bool,
   notBlockedWith,
   presenceExpr,
   str,
+  viewerOrNull,
+  visibleToViewer,
 } from "@/lib/sql-parts";
 import type {
   DmThread,
@@ -44,48 +47,45 @@ interface UserRow {
   presence: Presence;
 }
 
-export const getUserById = cache(async (userId: number): Promise<UserLite | null> => {
-  const rows = await query<UserRow>(`SELECT ${USER_COLS} FROM users u WHERE u.user_id = ?`, [userId]);
+/** Public profile row. `role` is the caller's DB login (`dbRoleFor(session)`); defaults to anonymous "web". */
+export const getUserById = cache(async (userId: number, role: DbRole = "web"): Promise<UserLite | null> => {
+  const rows = await queryAs<UserRow>(role, `SELECT ${USER_COLS} FROM users u WHERE u.user_id = ?`, [userId]);
   return rows[0] ?? null;
-});
-
-/**
- * The signed-in user, or null when there is no identity (Phase 1 has no real
- * sign-in; the dev "play as" cookie only counts when dev auth is enabled).
- * A stale dev cookie falls back to the default seed user.
- */
-export const getCurrentUser = cache(async (): Promise<UserLite | null> => {
-  const id = await getDevUserId();
-  if (id === null) return null;
-  const user = await getUserById(id);
-  if (user) return user;
-  return id === DEFAULT_DEV_USER_ID ? null : getUserById(DEFAULT_DEV_USER_ID);
 });
 
 /** Dev "play as" list. Empty unless dev auth is enabled. */
 export const getAllUsers = cache(async (): Promise<Array<{ user_id: number; username: string }>> => {
   if (!isDevAuthEnabled()) return [];
-  return query<{ user_id: number; username: string }>(
+  return queryAs<{ user_id: number; username: string }>(
+    "web",
     `SELECT u.user_id, u.username FROM users u ORDER BY u.user_id`,
   );
 });
 
 // ---------------------------------------------------------------- games
-export const getGames = cache(async (viewerId: number): Promise<GameInfo[]> => {
-  return query<GameInfo>(
+/**
+ * Active games with open-quest counts as seen by `viewerId` (null = anonymous: public quests only).
+ * `role` is `dbRoleFor(session)`; without it a signed-in viewer's role comes from the request session.
+ */
+export const getGames = cache(async (viewerId: number | null, role?: DbRole): Promise<GameInfo[]> => {
+  const viewer = viewerOrNull(viewerId);
+  const vis = visibleToViewer(viewer);
+  return queryAs<GameInfo>(
+    await resolveReadRole(viewer, role),
     `SELECT g.game_id, g.name, g.slug,
             (SELECT COUNT(*) FROM lfg_session s
                JOIN users h ON h.user_id = s.host_id AND h.status = 'active'
-              WHERE s.game_id = g.game_id AND s.status = 'open' AND ${NOT_LONG_PAST} AND ${VISIBLE_TO_VIEWER}) AS open_count
+              WHERE s.game_id = g.game_id AND s.status = 'open' AND ${NOT_LONG_PAST} AND ${vis.sql}) AS open_count
        FROM game g
       WHERE g.is_active = TRUE
       ORDER BY g.name`,
-    [viewerId, viewerId, viewerId],
+    vis.params,
   );
 });
 
 export const getModes = cache(async (): Promise<ModeInfo[]> => {
-  const rows = await query<ModeRow>(
+  const rows = await queryAs<ModeRow>(
+    "web",
     `SELECT gm.mode_id, gm.game_id, gm.name, gm.description
        FROM game_mode gm
       ORDER BY gm.game_id, gm.name, gm.mode_id`,
@@ -142,14 +142,20 @@ export interface QuestFilter {
   modeId?: number;
 }
 
-/** Open quests visible to `viewerId`, soonest first (unscheduled last), capped at OPEN_QUEST_LIMIT. */
-export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}): Promise<Quest[]> {
+/** Open quests visible to `viewerId` (null = anonymous: public only), soonest first, capped at OPEN_QUEST_LIMIT. */
+export async function getOpenQuests(
+  viewerId: number | null,
+  filter: QuestFilter = {},
+  role?: DbRole,
+): Promise<Quest[]> {
+  const viewer = viewerOrNull(viewerId);
+  const vis = visibleToViewer(viewer);
   const where = [
     `EXISTS (SELECT 1 FROM users h WHERE h.user_id = s.host_id AND h.status = 'active')`,
     NOT_LONG_PAST,
-    VISIBLE_TO_VIEWER,
+    vis.sql,
   ];
-  const params: SqlParam[] = [viewerId, viewerId, viewerId];
+  const params: SqlParam[] = [...vis.params];
   if (filter.gameId !== undefined) {
     where.push("s.game_id = ?");
     params.push(filter.gameId);
@@ -158,7 +164,8 @@ export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}):
     where.push("s.mode_id = ?");
     params.push(filter.modeId);
   }
-  const rows = await query<QuestRow>(
+  const rows = await queryAs<QuestRow>(
+    await resolveReadRole(viewer, role),
     `${QUEST_SELECT}
       WHERE ${where.join(" AND ")}
       ORDER BY (s.scheduled_start IS NULL), s.scheduled_start, s.session_id
@@ -168,9 +175,9 @@ export async function getOpenQuests(viewerId: number, filter: QuestFilter = {}):
   return rows.map(toQuest);
 }
 
-async function getQuestsByIds(ids: number[]): Promise<Quest[]> {
+async function getQuestsByIds(ids: number[], role: DbRole): Promise<Quest[]> {
   if (ids.length === 0) return [];
-  const rows = await query<QuestRow>(`${QUEST_SELECT} WHERE s.session_id IN (?)`, [ids]);
+  const rows = await queryAs<QuestRow>(role, `${QUEST_SELECT} WHERE s.session_id IN (?)`, [ids]);
   return rows.map(toQuest);
 }
 
@@ -179,9 +186,11 @@ interface RecRow extends QuestFit {
 }
 
 /** Top 5 matches from sp_recommend_sessions (p_log = FALSE: nothing is written). Cached per request. */
-export const getRecommendedQuests = cache(async (userId: number): Promise<Quest[]> => {
+export const getRecommendedQuests = cache(async (userId: number | null, role?: DbRole): Promise<Quest[]> => {
+  const viewer = viewerOrNull(userId);
+  if (viewer === null) return [];
   try {
-    return await loadRecommendedQuests(userId);
+    return await loadRecommendedQuests(viewer, await resolveReadRole(viewer, role));
   } catch (err) {
     // A failing procedure must never take the whole site down; the UI shows its empty state.
     console.error("[pairadice] sp_recommend_sessions failed:", err);
@@ -189,9 +198,12 @@ export const getRecommendedQuests = cache(async (userId: number): Promise<Quest[
   }
 });
 
-async function loadRecommendedQuests(userId: number): Promise<Quest[]> {
-  const recs = await callProc<RecRow>("CALL sp_recommend_sessions(?, ?, FALSE)", [userId, 5]);
-  const quests = await getQuestsByIds(recs.map((r) => r.session_id));
+async function loadRecommendedQuests(userId: number, role: DbRole): Promise<Quest[]> {
+  const recs = await callProcAs<RecRow>(role, "CALL sp_recommend_sessions(?, ?, FALSE)", [userId, 5]);
+  const quests = await getQuestsByIds(
+    recs.map((r) => r.session_id),
+    role,
+  );
   const byId = new Map(quests.map((q) => [q.session_id, q]));
   const out: Quest[] = [];
   for (const r of recs) {
@@ -215,6 +227,7 @@ async function loadRecommendedQuests(userId: number): Promise<Quest[]> {
 // ---------------------------------------------------------------- friends
 async function friendRows(
   userId: number,
+  role: DbRole,
   status: "accepted" | "pending",
   direction: "any" | "in" | "out",
 ): Promise<FriendEntry[]> {
@@ -224,25 +237,33 @@ async function friendRows(
       : direction === "out"
         ? "f.requester_id = ?"
         : "(f.requester_id = ? OR f.addressee_id = ?)";
+  const nb = notBlockedWith("u", userId);
   const params: SqlParam[] = [userId, status, userId];
   if (direction === "any") params.push(userId);
-  params.push(userId, userId); // notBlockedWith(u)
-  return query<UserRow>(
+  params.push(...nb.params);
+  return queryAs<UserRow>(
+    role,
     `SELECT ${USER_COLS}
        FROM friendship f
        JOIN users u ON u.user_id = IF(f.requester_id = ?, f.addressee_id, f.requester_id)
       WHERE f.status = ? AND ${cond}
-        AND ${notBlockedWith("u")}
+        AND ${nb.sql}
       ORDER BY u.display_name, u.user_id`,
     params,
   );
 }
 
-export const getFriendLists = cache(async (userId: number): Promise<FriendLists> => {
+const NO_FRIENDS: FriendLists = { accepted: [], incoming: [], outgoing: [] };
+
+/** Friend lists for a signed-in viewer; no viewer (anonymous) never touches friendship. */
+export const getFriendLists = cache(async (userId: number | null, role?: DbRole): Promise<FriendLists> => {
+  const viewer = viewerOrNull(userId);
+  if (viewer === null) return NO_FRIENDS;
+  const r = await resolveReadRole(viewer, role);
   const [accepted, incoming, outgoing] = await Promise.all([
-    friendRows(userId, "accepted", "any"),
-    friendRows(userId, "pending", "in"),
-    friendRows(userId, "pending", "out"),
+    friendRows(viewer, r, "accepted", "any"),
+    friendRows(viewer, r, "pending", "in"),
+    friendRows(viewer, r, "pending", "out"),
   ]);
   return { accepted, incoming, outgoing };
 });
@@ -261,8 +282,12 @@ interface DmRow {
 }
 
 /** Latest DM per conversation partner, newest first (max 5). */
-export async function getRecentDms(userId: number): Promise<DmThread[]> {
-  const rows = await query<DmRow>(
+export async function getRecentDms(userId: number | null, role?: DbRole): Promise<DmThread[]> {
+  const viewer = viewerOrNull(userId);
+  if (viewer === null) return [];
+  const nb = notBlockedWith("u", viewer);
+  const rows = await queryAs<DmRow>(
+    await resolveReadRole(viewer, role),
     `SELECT t.message_id, t.other_id, u.username AS other_username, u.display_name AS other_display_name,
             ${presenceExpr("u")} AS other_presence,
             t.sender_id, IF(t.is_deleted, NULL, t.content) AS content, t.is_deleted, t.sent_at
@@ -277,10 +302,10 @@ export async function getRecentDms(userId: number): Promise<DmThread[]> {
        ) t
        JOIN users u ON u.user_id = t.other_id
       WHERE t.rn = 1
-        AND ${notBlockedWith("u")}
+        AND ${nb.sql}
       ORDER BY t.sent_at DESC, t.message_id DESC
       LIMIT 5`,
-    [userId, userId, userId, userId, userId, userId],
+    [viewer, viewer, viewer, viewer, ...nb.params],
   );
   return rows.map((r) => ({
     message_id: r.message_id,
@@ -288,7 +313,7 @@ export async function getRecentDms(userId: number): Promise<DmThread[]> {
     other_username: r.other_username,
     other_display_name: r.other_display_name,
     other_presence: r.other_presence,
-    sent_by_me: r.sender_id === userId,
+    sent_by_me: r.sender_id === viewer,
     content: bool(r.is_deleted) ? null : str(r.content),
     is_deleted: bool(r.is_deleted),
     sent_at: r.sent_at,

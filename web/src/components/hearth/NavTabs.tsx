@@ -25,6 +25,9 @@ const TABS: Tab[] = [
   { href: "/character", label: "Character", short: "Me", icon: "icon-character", exact: true },
 ];
 
+const MOD_TAB: Tab = { href: "/mod", label: "Guild Hall", short: "Guild", icon: "icon-shield" };
+const ADMIN_TAB: Tab = { href: "/admin", label: "Admin", short: "Admin", icon: "icon-crown" };
+
 const isUnder = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 /**
@@ -32,17 +35,21 @@ const isUnder = (pathname: string, base: string) => pathname === base || pathnam
  * The current page gets aria-current="page"; a quest's camp page marks the Quest Board tab
  * with aria-current="location" and a quieter ember underline.
  */
-export function NavTabs() {
+export function NavTabs({ showMod = false, showAdmin = false }: { showMod?: boolean; showAdmin?: boolean }) {
   const pathname = usePathname();
+  const tabs = [...TABS, ...(showMod ? [MOD_TAB] : []), ...(showAdmin ? [ADMIN_TAB] : [])];
   return (
     <nav aria-label="Main menu" className="py-1">
-      <ul role="list" className="flex flex-nowrap items-stretch justify-between gap-1 lg:justify-start lg:gap-1.5">
-        {TABS.map((tab) => {
+      <ul
+        role="list"
+        className="flex snap-x snap-mandatory flex-nowrap items-stretch gap-1 overflow-x-auto overscroll-x-contain pb-1 lg:snap-none lg:gap-1.5 lg:overflow-visible lg:pb-0"
+      >
+        {tabs.map((tab) => {
           const active = tab.exact ? pathname === tab.href : isUnder(pathname, tab.href);
           const inSection = !active && tab.within !== undefined && isUnder(pathname, tab.within);
           const current = active ? "page" : inSection ? "location" : undefined;
           return (
-            <li key={tab.href} className="min-w-0 flex-1 lg:flex-none">
+            <li key={tab.href} className="min-w-16 flex-1 snap-start lg:min-w-0 lg:flex-none">
               <Link
                 href={tab.href}
                 aria-current={current}
@@ -55,7 +62,7 @@ export function NavTabs() {
                 }`}
               >
                 <Sprite name={tab.icon} scale={2} className={active ? "motion-safe:animate-pop" : ""} />
-                <span className="text-[11px] leading-tight lg:hidden">{tab.short}</span>
+                <span className="text-[13px] leading-tight lg:hidden">{tab.short}</span>
                 <span className="hidden lg:inline">{tab.label}</span>
               </Link>
             </li>

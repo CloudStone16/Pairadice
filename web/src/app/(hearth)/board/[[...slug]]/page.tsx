@@ -3,22 +3,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/hearth/EmptyState";
 import { QuestGrid } from "@/components/hearth/QuestGrid";
-import { SignInGate } from "@/components/hearth/SignInGate";
 import { Chip, Sprite, Window } from "@/components/ui";
 import { cartSprite } from "@/lib/format";
 import { resolveGame, resolveMode } from "@/lib/slugs";
-import { OPEN_QUEST_LIMIT, getCurrentUser, getGames, getModes, getOpenQuests } from "@/lib/queries";
+import { dbRoleFor, getViewer, getViewerUser } from "@/lib/auth/guards";
+import { OPEN_QUEST_LIMIT, getGames, getModes, getOpenQuests } from "@/lib/queries";
 
 type Params = { slug?: string[] };
 
 async function resolveSelection(slug: string[]) {
-  const user = await getCurrentUser();
-  if (!user) return null;
-  const [games, modes] = await Promise.all([getGames(user.user_id), getModes()]);
+  const session = await getViewer();
+  const user = await getViewerUser();
+  const role = dbRoleFor(session);
+  const viewerId = session?.userId ?? null;
+  const [games, modes] = await Promise.all([getGames(viewerId, role), getModes()]);
   const game = resolveGame(games, slug[0]);
   const gameModes = game ? modes.filter((m) => m.game_id === game.game_id) : [];
   const mode = resolveMode(gameModes, slug[1]);
-  return { user, game, gameModes, mode };
+  return { viewerId, role, timeZone: user?.timezone ?? "UTC", game, gameModes, mode };
 }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
@@ -31,7 +33,6 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     // the page itself reports the real error; use the generic title meanwhile
     return { title: "Quest Board | PairADice" };
   }
-  if (!sel) return { title: "Quest Board | PairADice" };
   // unknown games and modes (including id-style slugs like "1" or "5-competitive") are real 404s
   if ((slug[0] && !sel.game) || (slug[1] && !sel.mode)) notFound();
   if (sel.game) {
@@ -46,12 +47,11 @@ export default async function BoardPage({ params }: { params: Promise<Params> })
   if (slug.length > 2) notFound();
 
   const sel = await resolveSelection(slug);
-  if (!sel) return <SignInGate />;
-  const { user, game, gameModes, mode } = sel;
+  const { viewerId, role, timeZone, game, gameModes, mode } = sel;
   if (slug[0] && !game) notFound();
   if (slug[1] && !mode) notFound();
 
-  const quests = await getOpenQuests(user.user_id, { gameId: game?.game_id, modeId: mode?.mode_id });
+  const quests = await getOpenQuests(viewerId, { gameId: game?.game_id, modeId: mode?.mode_id }, role);
   const heading = mode ? `${game?.name} · ${mode.name}` : (game?.name ?? "Quest Board");
   const count = quests.length >= OPEN_QUEST_LIMIT ? `${OPEN_QUEST_LIMIT}+` : String(quests.length);
 
@@ -114,7 +114,7 @@ export default async function BoardPage({ params }: { params: Promise<Params> })
             No quests posted here yet &mdash; check back soon. The board fills up around supper time.
           </EmptyState>
         ) : (
-          <QuestGrid quests={quests} timeZone={user.timezone} />
+          <QuestGrid quests={quests} timeZone={timeZone} />
         )}
       </section>
     </div>

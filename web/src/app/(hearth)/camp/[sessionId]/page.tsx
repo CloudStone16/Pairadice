@@ -5,17 +5,17 @@ import { CampRules, LookingFor } from "@/components/hearth/CampRules";
 import { CampPaused } from "@/components/hearth/CampPaused";
 import { DialogueLog } from "@/components/hearth/DialogueLog";
 import { PartySeats } from "@/components/hearth/PartySeats";
-import { SignInGate } from "@/components/hearth/SignInGate";
 import { Sprite, buttonClasses } from "@/components/ui";
+import { dbRoleFor, getViewer } from "@/lib/auth/guards";
 import {
   getCamp,
-  getCurrentUser,
   getRoster,
   getSessionChat,
   getSessionLanguages,
   getSessionTags,
   getSlotNeeds,
   isCampMember,
+  getUserById,
 } from "@/lib/queries";
 
 type Params = { sessionId: string };
@@ -34,9 +34,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (id === null) notFound();
   let camp = null;
   try {
-    const user = await getCurrentUser();
-    if (!user) return { title: "Camp | PairADice" };
-    camp = await getCamp(id, user.user_id);
+    const viewer = await getViewer();
+    camp = await getCamp(id, viewer?.userId ?? null, dbRoleFor(viewer));
   } catch {
     // the page itself reports the real error; use the generic title meanwhile
     return { title: "Camp | PairADice" };
@@ -51,30 +50,33 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
   const id = parseId(sessionId);
   if (id === null) notFound();
 
-  const user = await getCurrentUser();
-  if (!user) return <SignInGate />;
+  const viewer = await getViewer();
+  const viewerId = viewer?.userId ?? null;
+  const dbRole = dbRoleFor(viewer);
+  const user = viewer ? await getUserById(viewer.userId, dbRole) : null;
+  const timeZone = user?.timezone ?? "UTC";
 
   // Resolve existence first (a real 404 must happen before anything streams), then fetch the
   // rest in one round trip. getRoster and getSessionChat enforce visibility and membership themselves.
-  const camp = await getCamp(id, user.user_id);
+  const camp = await getCamp(id, viewerId, dbRole);
   if (!camp) notFound();
   // a suspended or banned host pauses the camp: nothing else about it is fetched or rendered
   if (isPaused(camp.host_status)) return <CampPaused />;
 
   const [roster, needs, languages, tags, chat, isMember] = await Promise.all([
-    getRoster(id, user.user_id),
+    getRoster(id, viewerId, dbRole),
     getSlotNeeds(id),
     getSessionLanguages(id),
     getSessionTags(id),
-    getSessionChat(id, user.user_id),
-    isCampMember(id, user.user_id),
+    getSessionChat(id, viewerId, dbRole),
+    isCampMember(id, viewerId, dbRole),
   ]);
   const role: ViewerRole =
-    camp.host_id === user.user_id
+    viewerId !== null && camp.host_id === viewerId
       ? "host"
       : isMember
         ? "member"
-        : roster.some((r) => r.user_id === user.user_id && r.status === "requested")
+        : roster.some((r) => r.user_id === viewerId && r.status === "requested")
           ? "knocking"
           : "none";
   const invite =
@@ -84,15 +86,15 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
 
   return (
     <div className="flex flex-col gap-10">
-      <CampBanner camp={camp} role={role} timeZone={user.timezone} />
+      <CampBanner camp={camp} role={role} timeZone={timeZone} />
 
       <div className="grid gap-10 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <PartySeats
           camp={camp}
           roster={roster}
-          viewerId={user.user_id}
+          viewerId={viewerId ?? 0}
           canSeePrivate={isMember}
-          timeZone={user.timezone}
+          timeZone={timeZone}
         />
         <div className="flex flex-col gap-10">
           <LookingFor needs={needs} />
@@ -112,7 +114,7 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
         </div>
       </div>
 
-      <DialogueLog messages={chat} hostId={camp.host_id} status={camp.status} timeZone={user.timezone} />
+      <DialogueLog messages={chat} hostId={camp.host_id} status={camp.status} timeZone={timeZone} />
     </div>
   );
 }

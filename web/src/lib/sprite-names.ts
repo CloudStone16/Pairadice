@@ -49,6 +49,17 @@ export const SPRITE_NAMES = [
   "tile-wood",
   "deco-star",
   "deco-moon",
+  // Phase 2 — title screen / auth
+  "logo-title-32",
+  "icon-press-start",
+  "icon-discord",
+  "icon-mail",
+  "icon-key",
+  "icon-door",
+  "icon-door-closed",
+  "icon-eye",
+  "icon-eye-off",
+  "icon-warning",
 ] as const;
 
 export type SpriteName = (typeof SPRITE_NAMES)[number];
