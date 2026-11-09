@@ -22,6 +22,7 @@ export function CharacterSheet({
   games,
   languages,
   badges,
+  relationship,
 }: {
   card: PlayerCard;
   presence: Presence;
@@ -29,6 +30,8 @@ export function CharacterSheet({
   games: PlayerGame[];
   languages: PlayerLanguage[];
   badges: PlayerBadge[];
+  /** Friend/block controls, passed in for another signed-in player only. */
+  relationship?: ReactNode;
 }) {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -61,6 +64,7 @@ export function CharacterSheet({
           <div className="mt-2 w-full max-w-xs">
             <Meter value={card.trust_score} label="Trust" />
           </div>
+          {relationship}
         </Window>
       </div>
 

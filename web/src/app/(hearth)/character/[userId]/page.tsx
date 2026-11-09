@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { RelationshipBar } from "@/components/social/RelationshipBar";
+import { getViewer } from "@/lib/auth/viewer";
+import { getRelation } from "@/lib/queries-social";
 import {
   getCurrentUser,
   getPlayerBadges,
@@ -52,6 +55,20 @@ export default async function CharacterPage({ params }: { params: Promise<Params
     getPlayerBadges(id),
   ]);
   if (!card) notFound();
+
+  let relationship = null;
+  const viewer = me.user_id === id ? null : await getViewer();
+  if (viewer) {
+    const rel = await getRelation(viewer, id);
+    relationship = (
+      <RelationshipBar
+        userId={id}
+        name={card.display_name}
+        relation={rel.ok ? rel.value : "none"}
+        error={rel.ok ? undefined : rel.message}
+      />
+    );
+  }
   return (
     <CharacterSheet
       card={card}
@@ -60,6 +77,7 @@ export default async function CharacterPage({ params }: { params: Promise<Params
       games={games}
       languages={languages}
       badges={badges}
+      relationship={relationship}
     />
   );
 }

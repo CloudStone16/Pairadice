@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Avatar, Window } from "@/components/ui";
 import type { FriendEntry } from "@/lib/types";
 import { PresenceLabel } from "./PresenceLabel";
@@ -7,10 +8,13 @@ export function FriendList({
   title,
   friends,
   empty,
+  action,
 }: {
   title: string;
   friends: FriendEntry[];
   empty: string;
+  /** Controls shown under each friend (e.g. Remove). */
+  action?: (friend: FriendEntry) => ReactNode;
 }) {
   return (
     <Window title={`${title} (${friends.length})`}>
@@ -31,6 +35,7 @@ export function FriendList({
                   <PresenceLabel presence={f.presence} className="mt-1" />
                 </span>
               </Link>
+              {action ? <div className="mt-2 flex flex-wrap gap-2 px-1">{action(f)}</div> : null}
             </li>
           ))}
         </ul>
