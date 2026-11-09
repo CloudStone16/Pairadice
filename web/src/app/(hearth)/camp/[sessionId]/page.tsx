@@ -7,6 +7,7 @@ import { DialogueLog } from "@/components/hearth/DialogueLog";
 import { CampActions } from "@/components/hearth/CampActions";
 import { PartySeats } from "@/components/hearth/PartySeats";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { InviteBox } from "@/components/camp/InviteBox";
 import { getViewer, hasRole } from "@/lib/auth/guards";
 import { markRecommendationOutcome } from "@/lib/recommend";
@@ -51,8 +52,15 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return { title: isPaused(camp.host_status) ? "Camp paused | PairADice" : `${camp.title} | PairADice` };
 }
 
-export default async function CampPage({ params }: { params: Promise<Params> }) {
+export default async function CampPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<Params>;
+  searchParams: Promise<{ reported?: string | string[] }>;
+}) {
   const { sessionId } = await params;
+  const { reported } = await searchParams;
   const id = parseId(sessionId);
   if (id === null) notFound();
 
@@ -97,6 +105,7 @@ export default async function CampPage({ params }: { params: Promise<Params> }) 
 
   return (
     <div className="flex flex-col gap-10">
+      <ReportedNotice show={isReported(reported)} />
       <CampBanner
         camp={camp}
         role={role}

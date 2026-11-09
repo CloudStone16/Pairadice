@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
+import { MyReports } from "@/components/report/MyReports";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { getViewer } from "@/lib/auth/viewer";
+import { getMyReports } from "@/lib/mutations/report";
 import {
   getCurrentUser,
   getPlayerBadges,
@@ -30,7 +33,18 @@ export default async function MyCharacterPage() {
     getPlayerBadges(user.user_id),
   ]);
   if (!card) notFound();
+  const viewer = await getViewer();
+  const mine = viewer ? await getMyReports(viewer) : null;
   return (
-    <CharacterSheet card={card} presence={user.presence} isSelf games={games} languages={languages} badges={badges} />
+    <div className="flex flex-col gap-8">
+      <CharacterSheet card={card} presence={user.presence} isSelf games={games} languages={languages} badges={badges} />
+      {mine && (!mine.ok || mine.value.length > 0) ? (
+        <MyReports
+          reports={mine.ok ? mine.value : []}
+          timeZone={user.timezone}
+          error={mine.ok ? undefined : mine.message}
+        />
+      ) : null}
+    </div>
   );
 }

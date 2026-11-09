@@ -9,6 +9,16 @@ function isSameSitePath(value: string): boolean {
   if (value.length === 0 || value.length > MAX_LENGTH) return false;
   if (!value.startsWith("/") || value.startsWith("//")) return false;
   if (value.includes("\\") || CONTROL.test(value)) return false;
+  // dot segments (raw or percent-encoded) collapse in URL parsing and can turn "/.//host" into "//host"
+  for (const seg of value.split(/[?#]/, 1)[0].split("/")) {
+    let s: string;
+    try {
+      s = decodeURIComponent(seg);
+    } catch {
+      return false;
+    }
+    if (s === "." || s === "..") return false;
+  }
   // "/" followed by anything that parses as a different origin is not a path (scheme or authority tricks)
   try {
     if (new URL(value, "http://pairadice.invalid").origin !== "http://pairadice.invalid") return false;

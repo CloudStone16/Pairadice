@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CharacterSheet } from "@/components/hearth/CharacterSheet";
 import { SignInGate } from "@/components/hearth/SignInGate";
+import { ReportLink } from "@/components/report/ReportLink";
+import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { RelationshipBar } from "@/components/social/RelationshipBar";
 import { getViewer } from "@/lib/auth/viewer";
 import { getRelation } from "@/lib/queries-social";
@@ -39,8 +41,15 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return { title: `${card.display_name} | PairADice` };
 }
 
-export default async function CharacterPage({ params }: { params: Promise<Params> }) {
+export default async function CharacterPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<Params>;
+  searchParams: Promise<{ reported?: string | string[] }>;
+}) {
   const { userId } = await params;
+  const { reported } = await searchParams;
   const id = parseId(userId);
   if (id === null) notFound();
 
@@ -61,12 +70,16 @@ export default async function CharacterPage({ params }: { params: Promise<Params
   if (viewer) {
     const rel = await getRelation(viewer, id);
     relationship = (
-      <RelationshipBar
-        userId={id}
-        name={card.display_name}
-        relation={rel.ok ? rel.value : "none"}
-        error={rel.ok ? undefined : rel.message}
-      />
+      <>
+        <RelationshipBar
+          userId={id}
+          name={card.display_name}
+          relation={rel.ok ? rel.value : "none"}
+          error={rel.ok ? undefined : rel.message}
+        />
+        <ReportLink userId={id} name={card.display_name} back={`/character/${id}`} />
+        <ReportedNotice show={isReported(reported)} />
+      </>
     );
   }
   return (

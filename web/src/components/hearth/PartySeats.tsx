@@ -4,6 +4,7 @@ import {
   declinePlayerAction,
   kickPlayerAction,
 } from "@/app/(hearth)/camp/[sessionId]/actions";
+import { ReportLink } from "@/components/report/ReportLink";
 import { ActionControl } from "@/components/camp/ActionControl";
 import { SeatPortrait } from "@/components/camp/SeatPortrait";
 import { Avatar, Chip, Sprite, Window } from "@/components/ui";
@@ -66,6 +67,11 @@ function SeatedPlayer({
             ) : null}
           </p>
         ) : null}
+        {isMe ? null : (
+          <div className="mt-1">
+            <ReportLink userId={p.user_id} name={p.username} back={`/camp/${sessionId}`} sessionId={sessionId} className="-ml-3" />
+          </div>
+        )}
         {canKick ? (
           <div className="mt-2">
             <ActionControl

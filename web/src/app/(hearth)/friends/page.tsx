@@ -4,6 +4,8 @@ import { PlayerRow } from "@/components/social/PlayerRow";
 import { SocialAction } from "@/components/social/SocialAction";
 import { SocialStatus } from "@/components/social/SocialStatus";
 import { Chip, Sprite, Window, Button } from "@/components/ui";
+import { ReportLink } from "@/components/report/ReportLink";
+import { ReportedNotice, isReported } from "@/components/report/ReportedNotice";
 import { FormAlert } from "@/components/auth/FormAlert";
 import { requireViewer } from "@/lib/auth/guards";
 import { getFriendLists } from "@/lib/queries";
@@ -13,9 +15,9 @@ export const metadata: Metadata = { title: "Friends | PairADice" };
 
 const EMPTY: FriendOverview = { friend: [], incoming: [], outgoing: [], blocked: [] };
 
-export default async function FriendsPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
+export default async function FriendsPage({ searchParams }: { searchParams: Promise<{ q?: string | string[]; reported?: string | string[] }> }) {
   const viewer = await requireViewer("/friends");
-  const { q: rawQ } = await searchParams;
+  const { q: rawQ, reported } = await searchParams;
   const q = (Array.isArray(rawQ) ? rawQ[0] : rawQ)?.trim().slice(0, 40) ?? "";
 
   const [overviewRes, lists, found] = await Promise.all([
@@ -31,6 +33,8 @@ export default async function FriendsPage({ searchParams }: { searchParams: Prom
         <h1 className="font-display text-3xl font-bold [text-shadow:0_2px_0_var(--color-ink)]">Friends</h1>
         <p className="text-lavender">The folks you share a fire with.</p>
       </header>
+
+      <ReportedNotice show={isReported(reported)} />
 
       <SocialStatus>
         {overviewRes.ok ? null : <FormAlert message={overviewRes.message} />}
@@ -68,7 +72,12 @@ export default async function FriendsPage({ searchParams }: { searchParams: Prom
           title="Friends"
           friends={lists.accepted}
           empty="No friends yet. Good company is on the Quest Board."
-          action={(f) => <SocialAction kind="remove" userId={f.user_id} name={f.display_name} />}
+          action={(f) => (
+            <>
+              <SocialAction kind="remove" userId={f.user_id} name={f.display_name} />
+              <ReportLink userId={f.user_id} name={f.display_name} back="/friends" />
+            </>
+          )}
         />
 
         <Window title="Find players">

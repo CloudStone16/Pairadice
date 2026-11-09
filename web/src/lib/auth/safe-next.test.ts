@@ -30,6 +30,12 @@ describe("safeNext", () => {
     ];
     for (const b of bad) expect(safeNext(b)).toBe(DEFAULT_NEXT);
   });
+  test("rejects dot segments, raw or encoded", () => {
+    for (const b of ["/.//evil.com", "/a/..//evil.com", "/%2e//evil.com", "/%2E//evil.com", "/%2e%2E//evil.com", "/a/./b", "/..", "/a\\b"]) {
+      expect(safeNext(b)).toBe(DEFAULT_NEXT);
+    }
+    for (const ok of ["/character/7", "/camp/3?tab=x#y", "/friends", "/a.b/c", "/x?next=/../y"]) expect(safeNext(ok)).toBe(ok);
+  });
   test("null and undefined fall back", () => {
     expect(safeNext(null)).toBe("/hearth");
     expect(safeNext(undefined, "/x")).toBe("/x");

@@ -29,6 +29,8 @@ const GUILD_TAB: Tab = { href: "/mod", label: "Guild Hall", short: "Guild", icon
 
 const LAB_TAB: Tab = { href: "/admin/vector", label: "Vector Lab", short: "Lab", icon: "icon-sparkle" };
 
+const USERS_TAB: Tab = { href: "/admin/users", label: "Users", short: "Users", icon: "icon-users" };
+
 const isUnder = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 /**
@@ -38,7 +40,7 @@ const isUnder = (pathname: string, base: string) => pathname === base || pathnam
  */
 export function NavTabs({ showGuildHall = false, showVectorLab = false }: { showGuildHall?: boolean; showVectorLab?: boolean }) {
   const pathname = usePathname();
-  const tabs = [...TABS, ...(showGuildHall ? [GUILD_TAB] : []), ...(showVectorLab ? [LAB_TAB] : [])];
+  const tabs = [...TABS, ...(showGuildHall ? [GUILD_TAB] : []), ...(showVectorLab ? [LAB_TAB, USERS_TAB] : [])];
   return (
     <nav aria-label="Main menu" className="min-w-0 max-w-full py-1">
       <ul
