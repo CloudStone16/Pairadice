@@ -1,7 +1,8 @@
 // Drain embedding_outbox into MongoDB.
 // Usage: node scripts/worker.js --once        process what is queued, then exit
 //        node scripts/worker.js --watch       keep polling (Ctrl-C to stop)
-import { closeAll } from '../src/db.js';
+import { closeAll, sql } from '../src/db.js';
+import { config } from '../src/config.js';
 import { drainOutbox } from '../src/sync.js';
 
 const watch = process.argv.includes('--watch');
@@ -15,6 +16,12 @@ function report(s) {
     + (s.failed ? ` failed=${s.failed}` : ''));
 }
 
+// dead = attempts >= outboxMaxAttempts (same threshold as the v_outbox_dead view); query the table, not the view
+export async function countDead() {
+  const [[row]] = await sql().query('SELECT COUNT(*) AS n FROM embedding_outbox WHERE attempts >= ?', [config.outboxMaxAttempts]);
+  return Number(row.n);
+}
+
 async function main() {
   do {
     let s;
@@ -23,6 +30,8 @@ async function main() {
       if (s.rows) report(s);
       if (s.failed) process.exitCode = 1;                   // let scripts see failures; rows stay queued
     } while (s.rows > s.failed && !stopping);
+    const dead = await countDead();
+    if (dead > 0) console.log(`${new Date().toISOString()} dead=${dead}`);
     if (watch && !stopping) await new Promise((r) => setTimeout(r, POLL_MS));
   } while (watch && !stopping);
 }

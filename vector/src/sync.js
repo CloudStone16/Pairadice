@@ -75,8 +75,6 @@ export async function backfill() {
   return result;
 }
 
-const MAX_ATTEMPTS = 5;
-
 /**
  * Process up to `limit` outbox rows (oldest first). A row is removed only if its enqueued_at is
  * unchanged, so an edit that lands while the batch is being embedded is picked up next time.
@@ -85,7 +83,7 @@ export async function drainOutbox({ limit = 100 } = {}) {
   const db = sql();
   const [rows] = await db.query(
     `SELECT entity, entity_id, op, enqueued_at FROM embedding_outbox
-      WHERE attempts < ? ORDER BY enqueued_at LIMIT ?`, [MAX_ATTEMPTS, limit]);
+      WHERE attempts < ? ORDER BY enqueued_at LIMIT ?`, [config.outboxMaxAttempts, limit]);
   const summary = { rows: rows.length, player: null, session: null, failed: 0 };
   for (const entity of ['player', 'session']) {
     const batch = rows.filter((r) => r.entity === entity);

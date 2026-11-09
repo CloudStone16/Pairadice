@@ -16,6 +16,8 @@ export const config = {
   vectorMode: env.VECTOR_MODE ?? 'atlas',
   model: { name: 'Xenova/all-MiniLM-L6-v2', dims: 384 },
   // phase B blend: final = vectorWeight * similarity + (1 - vectorWeight) * SQL rule score
+  // outbox rows with attempts >= this are dead (never re-read). MUST agree with the v_outbox_dead SQL view (attempts >= 5).
+  outboxMaxAttempts: Number(env.OUTBOX_MAX_ATTEMPTS ?? 5),
   vectorWeight: Number(env.VECTOR_WEIGHT ?? 0.6),
 };
 
