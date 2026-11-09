@@ -24,7 +24,7 @@ export function HudBar({ user, viewer }: { user: UserLite; viewer: HudViewer }) 
         {/* below lg: logo and character share row one, the menu is row two. lg:order-* restores the desktop layout */}
         <div className="order-1 flex min-w-0 flex-1 flex-nowrap items-center justify-between gap-3 lg:contents">
           <Link href="/hearth" className="order-1 flex min-w-0 items-center gap-2 rounded-chip py-1 lg:gap-2.5">
-            <Sprite name="dice-32" className="h-[32px] w-[32px] motion-safe:animate-float lg:h-[64px] lg:w-[64px]" alt="" />
+            <Sprite name="mascot-cat" className="h-[32px] w-[32px] motion-safe:animate-float lg:h-[64px] lg:w-[64px]" alt="" />
             <span className="font-display text-xl font-bold tracking-wide text-cream [text-shadow:0_2px_0_var(--color-ink)] lg:text-2xl">
               PairADice
             </span>

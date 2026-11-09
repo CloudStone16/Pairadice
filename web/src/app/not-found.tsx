@@ -12,7 +12,7 @@ export default function RootNotFound() {
       <header className="border-b-4 border-ink bg-dusk">
         <div className="mx-auto flex max-w-[1680px] items-center px-4 py-2">
           <Link href="/hearth" className="flex items-center gap-2.5 rounded-chip py-1">
-            <Sprite name="dice-32" scale={1} alt="" />
+            <Sprite name="mascot-cat" scale={1} alt="" />
             <span className="font-display text-xl font-bold tracking-wide text-cream [text-shadow:0_2px_0_var(--color-ink)]">
               PairADice
             </span>

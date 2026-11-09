@@ -53,7 +53,7 @@ export default async function HearthPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      {/* a cabin window at night: sky and stars above, floorboards below, the mascot standing on them */}
+      {/* a cabin window at night: sky and stars above, floorboards below, the cat mascot standing on them */}
       <Window contentClassName="!p-0 overflow-hidden rounded-[8px]">
         <div className="relative overflow-hidden rounded-[8px] bg-gradient-to-b from-night via-dusk to-plum">
           {/* decorations only exist from sm up and live inside the right-hand safe zone the text keeps clear of */}
@@ -74,7 +74,7 @@ export default async function HearthPage() {
           {/* floorboards; the text above never sits on the tile */}
           <div aria-hidden="true" className="relative h-10 border-t-4 border-ink bg-plank">
             <Sprite
-              name="dice-32"
+              name="mascot-cat"
               scale={3}
               className="absolute bottom-[calc(100%-10px)] right-6 motion-safe:animate-float"
             />

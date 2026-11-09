@@ -10,7 +10,7 @@ export default function StyleGuide() {
     <div className="flex flex-1 items-center justify-center py-4">
       <Window title="PairADice" className="w-full max-w-xl">
         <div className="flex items-center gap-4">
-          <Sprite name="dice-32" scale={2} className="motion-safe:animate-float" />
+          <Sprite name="mascot-cat" scale={2} className="motion-safe:animate-float" />
           <div>
             <h1 className="font-display text-3xl font-bold">Find your party.</h1>
             <p className="text-lavender">Pull up a log by the fire and roll for a squad.</p>

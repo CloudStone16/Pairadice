@@ -19,7 +19,7 @@ export function TitleScreen({ tagline, children }: { tagline: string; children: 
 
       <main id="main" className="relative mx-auto flex w-full max-w-md flex-1 flex-col items-center gap-6 px-4 pb-16 pt-10 sm:pt-14">
         <header className="flex flex-col items-center gap-2 text-center">
-          <Sprite name="logo-title-32" scale={4} className="motion-safe:animate-float" />
+          <Sprite name="mascot-cat" scale={4} className="motion-safe:animate-float" />
           <p className="font-display text-4xl font-bold tracking-wide text-cream [text-shadow:0_3px_0_var(--color-ink)] sm:text-5xl">
             PairADice
           </p>

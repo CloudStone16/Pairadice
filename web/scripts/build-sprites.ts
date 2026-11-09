@@ -6,7 +6,7 @@
  * Reads  sprites/src/<name>.json
  *   { "size": 16 | 32, "palette": { "<char>": "#rrggbb" }, "rows": ["..."], "notes"?: "..." }
  * Writes public/sprites/<name>.svg, public/sprites/_preview.html,
- *        src/lib/sprites.generated.ts and src/app/icon.svg.
+ *        src/lib/sprites.generated.ts and src/app/icon.svg (the favicon, drawn from mascot-cat).
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -142,7 +142,7 @@ function toSvg(s: Sprite): string {
 }
 
 const GROUPS: { title: string; test: (n: string) => boolean }[] = [
-  { title: "Mascot", test: (n) => n.startsWith("dice-") || n.startsWith("logo-") },
+  { title: "Mascot", test: (n) => n.startsWith("mascot-") || n.startsWith("dice-") || n.startsWith("logo-") },
   { title: "Cartridges", test: (n) => n.startsWith("cart-") },
   { title: "Avatars", test: (n) => n.startsWith("avatar-") },
   { title: "Icons", test: (n) => n.startsWith("icon-") },
@@ -262,8 +262,8 @@ function main(): void {
   );
   writeIfChanged(join(OUT_DIR, "_preview.html"), previewHtml(sprites));
 
-  const dice = sprites.find((s) => s.name === "dice-32");
-  if (dice) writeIfChanged(ICON_FILE, toSvg(dice));
+  const cat = sprites.find((s) => s.name === "mascot-cat");
+  if (cat) writeIfChanged(ICON_FILE, toSvg(cat));
 
   for (const w of warnings) console.warn(`  ! ${w}`);
   const d16 = sprites.filter((s) => s.size === 16).length;
