@@ -1,6 +1,6 @@
 # PairADice: handoff for Arjun
 
-Last updated: 2026-11-10. Phase 6 (moderation) is built on branch `phase-6-moderation`, on top of `main` at `83f46be`, and is not merged yet.
+Last updated: 2026-11-11. Phase 5 (camp chat, DMs, reviews, badges) is built on branch `phase-5-chat`, on top of the Phase 6 work (moderation, last commit `cba9043`), and is not merged yet at the time of writing.
 This file is meant to be the only document you need to finish
 the project. It is tracked in git on purpose: `docs/` is gitignored, so anything written there is invisible to you.
 
@@ -21,7 +21,7 @@ Keychain items. Keep it that way if you edit it.
 6. [File map](#6-file-map)
 7. [Conventions and gotchas](#7-conventions-and-gotchas)
 8. [Phase 6: Moderation (done)](#8-phase-6-moderation-done)
-9. [Phase 5: Camp chat and DMs](#9-phase-5-camp-chat-and-dms)
+9. [Phase 5: Camp chat, DMs and reviews (done)](#9-phase-5-camp-chat-dms-and-reviews-done)
 10. [MongoDB authentication](#10-mongodb-authentication)
 11. [Discord OAuth sign-in](#11-discord-oauth-sign-in-optional-polish)
 12. [Phase 7: Polish](#12-phase-7-polish)
@@ -38,7 +38,7 @@ PairADice is an LFG (looking-for-group) board for video games, a PES University 
 Learning Level 3, Aug to Dec 2026, 50 marks). The database design is what is graded; the web app shows it working.
 Repo: `CloudStone16/Pairadice`, branch `main`.
 
-Phases 0 to 4, profile editing and Phase 6 (moderation) are done. From `git log`, in the order they landed:
+Phases 0 to 4, profile editing, Phase 6 (moderation) and Phase 5 (chat, DMs, reviews) are done. From `git log`, in the order they landed:
 
 | Area | Commits (newest last in each row) |
 |---|---|
@@ -52,30 +52,31 @@ Phases 0 to 4, profile editing and Phase 6 (moderation) are done. From `git log`
 | Hardening | `a094618` closed procedure auth holes, `9399e2b` reads on the viewer's own login, `a0d1273` accessibility |
 | Profile editing | `fdc9b97` procedures, `894396a` actions and loader, `f493469` editor UI |
 | Docs | `741007f` README, `c581614` DEMO, `e6ba1ac` sync, `83f46be` handoff |
-| Phase 6 moderation | branch `phase-6-moderation`: `12_moderation.sql`, RBAC and routine changes, `/mod`, `/admin/users`, `/report` |
+| Phase 6 moderation | `38bcbc7` procedures, `36aaf2b` icons, `439bdcb` web, `cba9043` docs: `12_moderation.sql`, RBAC and routine changes, `/mod`, `/admin/users`, `/report` |
+| Phase 5 chat | branch `phase-5-chat` (uncommitted at the time of writing): `13_chat.sql`, RBAC changes, `check-chat-reads.ts`, chat, DM and review screens, 13 sprites |
 
-Counts, taken from the SQL files on 2026-11-10 (the 254 check total is from a `--tests` run):
+Counts, taken from the SQL files on 2026-11-11 (the 319 check total is from a `--tests` run):
 
 | Object | Count |
 |---|---|
 | Tables | 45 (`01_schema.sql`) |
 | Views | 4 (`v_open_sessions`, `v_player_card`, `v_session_roster`, `v_outbox_dead`) |
-| Functions | 8: `fn_has_permission`, `fn_is_blocked`, `fn_user_active`, `fn_are_friends`, `fn_platform_compatible`, `fn_local_time`, `fn_trust_score`, `fn_staff_rank` |
-| Procedures | 41: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11, 9 in 12 (the 3 `t_*` test helpers in 06 are not counted) |
+| Functions | 9: `fn_has_permission`, `fn_is_blocked`, `fn_user_active`, `fn_are_friends`, `fn_platform_compatible`, `fn_local_time`, `fn_trust_score`, `fn_staff_rank`, `fn_dm_refusal` |
+| Procedures | 51: 6 in 02, 2 in 07, 1 in 08, 7 in 09, 7 in 10, 9 in 11, 9 in 12, 10 in 13 (the 3 `t_*` test helpers in 06 are not counted) |
 | Events | 1: `ev_expire_sanctions` (12), every 5 minutes |
 | Triggers | 55: 23 in 02, 30 in 07 (vector sync), 2 in 09 |
-| DB checks | 254 in `06_constraint_tests.sql` (204 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 50 behaviour rows) |
-| Web unit tests | 106 across 10 files, all passing (`bun test`) |
-| Sprites | 120 JSON sources in `web/sprites/src/` (Phase 6 added `icon-claim`, `icon-lift`, `icon-hide-message`, `icon-restore`, `icon-users`) |
+| DB checks | 319 in `06_constraint_tests.sql` (255 `CALL t_expect_error`, `t_expect_msg` and `t_probe` rows plus 64 behaviour rows) |
+| Chat read checks | 46 in `web/scripts/check-chat-reads.ts` (`bun run check:chat`; needs `MYSQL_PWD` in the environment) |
+| Web unit tests | 134 across 15 files, all passing (`bun test`) |
+| Sprites | 133 JSON sources in `web/sprites/src/` (Phase 5 added `icon-send`, `icon-emoji`, 8 emotes and 3 badge medals) |
 
 What works today: schema, routines and RBAC; MongoDB vector store with outbox sync and hybrid ranking; email sign-in
 with a different MySQL login per role; hosting, joining and managing quests; friends and blocks; profile editing at
 `/character/edit`; the admin Vector Lab at `/admin/vector`; moderation: player reports at `/report/[userId]`, the Guild Hall
 at `/mod` (overview, `/mod/reports`, `/mod/reports/[id]`, `/mod/sanctions`, `/mod/audit`) and admin users and roles at
-`/admin/users` and `/admin/users/[id]`.
+`/admin/users` and `/admin/users/[id]`; camp chat with a composer and emotes (polled every 4 seconds), DM inbox and threads at `/messages`, "Rate your party" on completed camps, and badge medals on the character sheet. The player role has no direct DML on any table.
 
-What does not exist yet: chat and DM write paths (Phase 5), Discord sign-in, MongoDB authentication, a polish pass.
-Sections 9 to 12 spec each one. The player still has direct `INSERT` on `message` and `review` until Phase 5.
+What does not exist yet: Discord sign-in, MongoDB authentication, a polish pass, unread counts, websockets. Sections 10 to 12 spec the first three.
 
 A mascot change is in flight (separate agent, not you): the site mascot moves from the lavender `dice-32` die to
 `mascot-cat`, a white maneki-neko cat with a die standing on its corner (32 px sprite `mascot-cat`), and the favicon
@@ -90,16 +91,16 @@ Source of truth is `documents/DBMS Level 3.pdf`. This reuses the README's map an
 |---|---:|---|---|---|
 | ER diagram | 2 | Done | `documents/pairadice_erd.drawio` (9 pages, generated by `documents/tools/gen_erd.py`) | Only if you add tables: add them to the generator and rerun (section 7) |
 | Relational schema, keys, constraints | 3 | Done | `01_schema.sql`; drawio page 9 | Any new table needs adding to the generator |
-| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 254 checks in `06` | Keep the check count in README and DEMO in sync |
+| SQL DDL with constraints | 4 | Done | `01_schema.sql`; 319 checks in `06` | Keep the check count in README and DEMO in sync |
 | NoSQL / vector DB creation | 4 | Done | `vector/src/schema.js`, `vector/scripts/init-db.js` | Mongo users bound to the roles (section 10) strengthens it |
 | Technology justification | 1 | Done | README, "Technology justification" (verified present, 3 subsections plus a table) | Re-read at the end |
-| DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 12, except chat and review inserts | Phase 5 adds more procedures |
+| DML | 4 | Done | `03_seed.sql`; every app write is a procedure in 08 to 13; the player has no direct DML | None |
 | Nested / correlated / recursive, joins | 4 | Done | `05_sample_queries.sql` Q1 to Q18 | None |
-| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `12` | Phase 5 adds more, with tests |
+| Procedures, functions, triggers, CTEs | 6 | Done | `02`, `07` to `13` | None |
 | NoSQL / vector feature with RUD | 7 | Done | `/admin/vector`, `vector/scripts/demo-rud.js`, hybrid Hearth | Keep the Vector Lab working through Mongo auth (section 10) |
-| Next.js UI | 3 | Mostly done | `web/` | Phase 5 screens, Phase 7 polish |
+| Next.js UI | 3 | Mostly done | `web/`; chat, DMs and reviews are covered | Phase 7 polish |
 | Backend / API + DB integration | 2 | Done | server actions, per-role pools, `web/src/lib/mutations/` | None |
-| Authentication, 2+ roles, RBAC in the DB | 4 | Done | `04_rbac.sql`, `08_auth.sql`, `12_moderation.sql`, `requireRole`, per-role logins | Phase 6 made the moderator role visible in the app (`/mod`); a moderator gets 404 on `/admin/users` |
+| Authentication, 2+ roles, RBAC in the DB | 4 | Done | `04_rbac.sql`, `08_auth.sql`, `12_moderation.sql`, `13_chat.sql`, `requireRole`, per-role logins | Phase 6 made the moderator role visible in the app (`/mod`); a moderator gets 404 on `/admin/users` |
 | Documentation and Git/GitHub | 2 | Done | README, DEMO, this file, history | Final sync (section 12) |
 | Originality, individual contribution, viva | 4 | Depends on you | `documents/DEMO.md` | Rehearse; keep the app explainable |
 
@@ -110,19 +111,17 @@ Efforts are rough working days for one person who already knows the repo.
 | Order | Work | Effort | Why here |
 |---:|---|---|---|
 | done | Phase 6 Moderation (section 8) | | Built and tested on `phase-6-moderation` |
-| 1 | Phase 5 chat and DMs (section 9) | 1.5 to 2 days | The `message` table and its trigger exist; only the write path and screens are missing. It also closes the last direct player grants |
-| 2 | MongoDB authentication (section 10) | 0.5 day | Small and mostly a port. Do it before the demo script is finalised, because it changes demo commands |
-| 3 | Discord OAuth (section 11) | 1 day | Optional. Needs credentials from the owner |
-| 4 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
+| done | Phase 5 chat, DMs and reviews (section 9) | | Built and tested on `phase-5-chat`; closed the last direct player grants |
+| 1 | MongoDB authentication (section 10) | 0.5 day | Small and mostly a port. Do it before the demo script is finalised, because it changes demo commands |
+| 2 | Discord OAuth (section 11) | 1 day | Optional. Needs credentials from the owner |
+| 3 | Phase 7 Polish (section 12) | 1.5 days | Always last, but never skip the docs sync and the rehearsal |
 
 If time runs short, cut in this order (first item is cut first):
 
 1. Discord OAuth. The button already says "coming soon", and the README documents it as a gap.
 2. Phase 7 extras: sound and motion toggles, extra mascot poses, new decorations.
-3. Unread counts and the emote picker in chat.
-4. DM inbox. Keep session chat; it is the more visible half.
-5. Admin game-catalogue management and the review-writing form.
-6. MongoDB authentication. Cut it last of these, because it is cheap and answers an obvious viva question.
+3. Admin game-catalogue management.
+4. MongoDB authentication. Cut it last of these, because it is cheap and answers an obvious viva question.
 
 Never cut: the tests for whatever you build; the README and DEMO sync; a full rehearsal.
 
@@ -155,7 +154,7 @@ Passwords for the five login flags come from `PD_WEB_PWD`, `PD_AUTH_PWD`, `PD_AP
 `PD_ADMIN_PWD` when set, otherwise from a hidden prompt. Re-running resets those passwords, and re-running
 `04_rbac.sql` detaches existing logins, so pass every login you want to keep on every run.
 
-Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, 12, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
+Actual load order inside `setup.sh`: 01, 02, 08, 09, 10, 11, 12, 13, then 03 (seed), 04 (RBAC), 07 (vector triggers), then
 06 (tests) at the end. 04 must come after every procedure it grants on.
 
 Passwordless path (recommended on Linux, needs the `auth_socket` plugin):
@@ -249,7 +248,8 @@ Run from `web/`:
 ```bash
 bun run typecheck      # tsc --noEmit
 bun run lint           # eslint
-bun test               # 106 pass, 0 fail in 10 files today
+bun test               # 134 pass, 0 fail in 15 files today
+MYSQL_PWD=... bun run check:chat   # 46 chat read checks; export MYSQL_PWD from the Keychain or a hidden prompt first
 bun run build          # runs bun run sprites first
 ```
 
@@ -297,13 +297,14 @@ database/
   03_seed.sql             12 users, 3 games, 10 sessions, reports, sanctions
   04_rbac.sql             six MySQL roles and every grant
   05_sample_queries.sql   Q1..Q18
-  06_constraint_tests.sql 254 checks; helpers t_expect_error, t_expect_msg, t_probe
+  06_constraint_tests.sql 319 checks; helpers t_expect_error, t_expect_msg, t_probe
   07_vector_outbox.sql    30 sync triggers, outbox procedures, v_outbox_dead
   08_auth.sql             sp_register_user
   09_sessions.sql         quest lifecycle procedures, 2 recommendation-outcome triggers
   10_social.sql           friend and block procedures
   11_profiles.sql         9 profile-editing procedures
   12_moderation.sql       fn_staff_rank, 9 moderation and role procedures, ev_expire_sanctions
+  13_chat.sql             fn_dm_refusal, 10 chat, DM and review procedures
   setup.sh                loader (read --help)
   README.md               agent guide, GITIGNORED (local only)
 vector/
@@ -311,22 +312,25 @@ vector/
   src/                    config, db, embedding, source text, sync, search, schema
   scripts/                init-db.js, backfill.js, worker.js, demo-rud.js
 web/
-  scripts/                build-sprites.ts, check-db-roles.ts, dev-keychain.sh
+  scripts/                build-sprites.ts, check-db-roles.ts, check-chat-reads.ts, dev-keychain.sh
   sprites/src/*.json      pixel sources; public/sprites/*.svg are generated
   src/proxy.ts            replaces middleware
   src/app/(auth)/         sign-in, sign-up, actions.ts
   src/app/(hearth)/       hearth, board, camp/[id], camp/new, party, friends, character,
                           character/edit, mod/** (Guild Hall), admin/vector, admin/users/**,
-                          report/[userId], styleguide
+                          report/[userId], messages, messages/[userId], styleguide
+                          (chat/ holds only the chat server actions)
   src/app/api/admin/vector/snapshot/route.ts
-  src/components/         ui, hearth, auth, camp, character, quest, social, lab, mod, admin, report
+  src/app/api/chat/[sessionId]  camp chat polling route (GET ?after=ID)
+  src/app/api/dm/[userId]       DM thread polling route
+  src/components/         ui, hearth, auth, camp, character, quest, social, lab, mod, admin, report, chat, review
   src/lib/
     db.ts, db-roles.ts            per-role pools: queryAs, execAs, callProcAs, transactionAs
     auth/                         guards, viewer, session, token, password, rate-limit, safe-next, signup-errors
     read-login.ts                 readCtx: picks the login for a read, fails closed to "web"
-    mutations/                    run.ts (runAsViewer), sessions, participants, social, profile, moderation, report, admin
-    moderation/, report/          plain validation modules with tests
-    queries*.ts                   typed reads (queries-mod.ts, queries-admin.ts for Phase 6); sql-parts.ts shared fragments
+    mutations/                    run.ts (runAsViewer), sessions, participants, social, profile, moderation, report, admin, chat, review
+    moderation/, report/, chat/, review/   plain validation modules with tests
+    queries*.ts                   typed reads (queries-mod.ts, queries-admin.ts for Phase 6; queries-chat.ts for Phase 5); sql-parts.ts shared fragments
     recommend.ts, vector/         hybrid ranking and the read-only Mongo client
     sprite-names.ts               the sprite contract list
 documents/
@@ -355,9 +359,9 @@ calls `requireRole("admin", PATH)` in each action).
 `Object.create(null)` crashed every failed save once. Return object literals, strings, numbers, arrays.
 
 **Every app write is a DEFINER procedure.** The player login has no direct DML on sessions, participants,
-friendships, blocks or the profile tables. A web mutation is one `CALL` through `runAsViewer` (`mutations/run.ts`),
-which picks the login of the viewer's highest role and turns SQLSTATE 45000 messages into user-visible text. Two
-grants are still direct and are what Phase 5 should replace: player `INSERT` on `message` and `review`.
+friendships, blocks, the profile tables, messages or reviews. A web mutation is one `CALL` through `runAsViewer` (`mutations/run.ts`),
+which picks the login of the viewer's highest role and turns SQLSTATE 45000 messages into user-visible text. No direct
+grants are left: Phase 5 replaced the player's `INSERT` on `message` and `review` and its `SELECT` on `message`.
 
 **Procedure pattern.** Copy `database/09_sessions.sql` or `10_social.sql`:
 
@@ -451,81 +455,49 @@ segments such as `/.//evil.com`, which protects the sign-in `next` and the repor
 - The procedures COMMIT, so a caller cannot wrap them in a transaction and roll back (this is why the DEMO step changed).
 - Audit rows never contain message bodies or password hashes. The ER diagram is unchanged.
 
-## 9. Phase 5: Camp chat and DMs
+## 9. Phase 5: Camp chat, DMs and reviews (done)
 
-State today: `message` exists with `session_id` XOR `receiver_id`, soft delete via `is_deleted`, and the
-`trg_message_bi` trigger. The UI is read-only: `DialogueLog` on the camp page shows the latest 200 lines to members
-(`getSessionChat` in `lib/queries-camp.ts`), and `RecentDms` on the Hearth shows the latest line per partner
-(`getRecentDms` in `lib/queries.ts`). Nothing can send a message.
+Built on branch `phase-5-chat`. No new tables.
 
-What the trigger already enforces, so do not duplicate it: a muted, suspended or banned sender is refused; session
-chat needs an accepted participant; a DM across a block is refused. What it does not enforce: who may DM whom, length,
-rate, and that `sender_id` is the real actor (the player login has a direct `INSERT` on `message`, so a forged id is
-possible today). So write through procedures.
+**Database** (`database/13_chat.sql`, loaded after 12 and before the seed; grants in `04_rbac.sql`):
 
-**RBAC facts to respect.** `pd_web` has no SELECT on `message`, `friendship` or `user_block`, so chat and DM pages
-must be signed-in only and skip the query for anonymous visitors. The player login does have SELECT on `message`
-(and on `friendship` and `user_block`), and the queries filter to the viewer. That is a weaker story than it could
-be: an injection bug in a chat page could read other people's DMs.
-
-### Preferred design (more DB-first)
-
-Add `database/13_chat.sql` (or put it in 12) with DEFINER procedures, then revoke the table SELECT:
-
-| Procedure | What it does |
+| Object | What it does |
 |---|---|
-| `sp_send_session_message(actor, session_id, content)` | `fn_user_active`; content trimmed, 1 to 1000 characters; at most about 20 messages per 30 seconds per actor; inserts; the trigger enforces membership and mute |
-| `sp_send_dm(actor, receiver_id, content)` | as above; recommend DM only between friends (`fn_are_friends`) or players who share an accepted session, so strangers cannot spam; the trigger enforces blocks |
-| `sp_chat_history(actor, session_id, after_message_id, limit)` | returns lines to the host or an accepted participant only; hides lines from anyone who is blocked either way with the actor (`fn_is_blocked`); never returns the body of a deleted line |
-| `sp_dm_thread(actor, other_id, after_message_id, limit)` and `sp_dm_inbox(actor)` | the viewer's own conversations; empty if blocked |
-| `sp_delete_own_message(actor, message_id)` | soft delete of your own message |
+| `fn_dm_refusal(actor, other)` | the reason a DM is refused, or NULL: friends, or both accepted (or later left) in the same camp; never across a block |
+| `sp_send_session_message`, `sp_send_dm` | active actor, 1 to 1000 characters after trimming, 20 messages per 30 seconds per player (named lock via `GET_LOCK`, shared by chat and DMs); the `message` trigger still checks membership, mute and blocks |
+| `sp_delete_own_message` | soft delete; refused while the line is reported or after a moderator acted; audited |
+| `sp_write_review` | once per pair in a completed camp, both players accepted, 1 to 5 stars, comment up to 500 characters; the review triggers refresh ratings, trust and badges |
+| `sp_chat_history`, `sp_dm_thread`, `sp_dm_inbox` | the actor's own conversations only; blocked players' lines are hidden; a deleted line returns no body |
+| `sp_dm_can_message`, `sp_my_chat_status`, `sp_pending_reviews` | composer state (can message plus the reason), mute end time and suspension, teammates not yet reviewed |
 
-Then in `04_rbac.sql` remove `SELECT ON message` from `pairadice_player`, add `GRANT SELECT ON message` to
-`pairadice_moderator` explicitly (moderators need evidence, and they inherit player today), and drop the direct
-`INSERT ON message`. A probe then proves "a player cannot read `message` directly". Rewrite `getSessionChat` and
-`getRecentDms` to call the procedures through `callProcAs`. This is more work but gives a clean demo line.
+Reads allow active and suspended players (suspended is read-only). RBAC: the player lost `SELECT` and `INSERT` on
+`message` and `INSERT` on `review`, so it has no direct DML on any table. The moderator got an explicit `SELECT` on
+`message` as report evidence. `06_constraint_tests.sql` grew to 319 checks (writes, rules, grant probes). MySQL cannot
+capture `CALL` result sets in SQL, so `web/scripts/check-chat-reads.ts` (`bun run check:chat`, 46 checks, password from
+the `MYSQL_PWD` environment variable) proves the row filtering of the read procedures.
 
-### Minimum design (if time is short)
+**Web.**
+- Camp chat: `components/chat/ChatRoom.tsx` and `Composer.tsx` on `/camp/[id]`. The server action is in
+  `app/(hearth)/chat/actions.ts`; mutations in `lib/mutations/chat.ts`; reads in `lib/queries-chat.ts`.
+- Polling design: no websockets. A client component polls `GET /api/chat/[sessionId]?after=ID` (DMs:
+  `/api/dm/[userId]`) every 4 seconds. The route runs `requireViewer`, calls the history procedure, sends
+  `Cache-Control: no-store` and returns JSON. Lines are rendered as text only; the stored text keeps the token.
+- Emotes: tokens such as `:gg:` (8 emotes) become sprites at render time (`lib/chat/emotes.ts`), with a picker.
+- DMs: `/messages` inbox and `/messages/[userId]` thread, Message links on friend rows and the character sheet, a
+  "Chat" tab in the navigation, and Hearth `RecentDms` linking to threads.
+- States: muted players see the composer disabled with the end time; suspended players are read-only; a blocked or
+  stranger DM with no history returns 404 (no name or presence leaks); an existing thread that can no longer be
+  messaged is shown read-only with the refusal reason and no composer or presence.
+- Reviews: `components/review/RatePartyPanel.tsx` ("Rate your party") on completed camps; badge medals via
+  `components/character/BadgeShelf.tsx`.
 
-Keep the direct SELECT and the existing queries. Add only `sp_send_session_message` and `sp_send_dm`, revoke the direct
-`INSERT`, and filter blocked senders in `getSessionChat` with the existing `notBlockedWith` helper pattern. Note that
-`getSessionChat` does not currently filter blocked users inside a camp; add it either way.
+**Design decisions.** Procedures take the actor, never a sender id, so a forged sender is impossible. The rate limit
+uses a named lock rather than a new table. Comments and chat are never rendered as HTML.
 
-### Screens
-
-- **Camp chat.** Extend the camp page: below `DialogueLog` add a composer (textarea, character counter, Send button,
-  Enter sends, Shift+Enter breaks a line). Use a server action with `useActionState` and keep the text on a failed send.
-- **Refresh without websockets.** A client component polls a route handler `GET /api/chat/[sessionId]?after=ID`
-  every 4 seconds while the tab is visible (`document.visibilityState`), backing off to 15 seconds after an error.
-  The handler runs `requireViewer`, calls the history procedure, sets `Cache-Control: no-store`, and returns plain JSON.
-  Alternative that needs no route: a client component that calls `router.refresh()` on the same interval; simpler but
-  re-renders the whole page. Whichever you pick, append new lines without moving focus, keep scroll anchored to the
-  bottom only if the reader is already there, and announce new lines through an `aria-live="polite"` log region.
-- **DMs.** `/messages` (inbox: one row per conversation, newest first) and `/messages/[userId]` (thread plus
-  composer, same polling). Entry points: a "Message" button on friend rows (`FriendList`, `social/PlayerRow`) and on
-  the character sheet, and the existing Hearth `RecentDms` panel linking to the thread. A thread with a blocked user
-  shows "You cannot message this player" and no composer.
-- **States.** Muted: composer disabled with "You are muted until ...". Suspended: read-only with the existing
-  `SuspendedBanner`. Kicked or left camp: chat locks (existing `LockedNote`).
-- **Rendering.** Always as text. React escapes it; use `whitespace-pre-wrap`. No HTML, no markdown, no links
-  turned into anchors. Emotes: a fixed set of tokens such as `:gg:` mapped to sprites at render time; the database
-  stores the token text only.
-- **Report link.** Each line gets a "Report" link to `/report/[userId]?session=...&message=...`; the Phase 6 report page and `sp_report_user` already accept `session` and `message`.
-- **Unread counts** need a read-tracking table (new table `message_read(user_id, session_id or other_id, last_read_message_id)`).
-  Treat as optional and cut it first.
-
-### Reviews (part of the original Phase 5)
-
-`review` rows drive ratings, trust and the "Great Teammate" badge through triggers, but there is no form. Add
-`sp_write_review(actor, session_id, reviewed_id, rating, comment)`: both players accepted in a `completed` session,
-once per pair, 1 to 5 stars, comment up to 500 characters; revoke the direct `INSERT ON review`. Show a "Rate your
-party" panel on a completed camp page. Optional if time is short.
-
-### Tests
-
-Refusal messages for each rule; the rate limit; a send by a blocked or muted user; DM to a stranger refused; history
-hides blocked senders; a message sent as someone else is impossible (the procedure takes no sender id); a probe that
-the player has no direct `SELECT` or `INSERT` on `message` after the revokes.
+**Cut on purpose.** Unread counts (they need a read-tracking table, `message_read`, which would be a new table) and
+websockets (polling is simpler and enough). Not applied: an index on `message(sender_id, sent_at)` and on
+`message(session_id, message_id)` would speed up the rate limit and chat history, but the owner's rule is not to alter
+existing tables; it needs the owner's OK.
 
 ## 10. MongoDB authentication
 
@@ -696,7 +668,7 @@ row lengths, palette keys and the 8 colour cap, and fails if a listed name has n
 run it. Draw with the design tokens plus ink `#120e1f` outlines, everything original. Use `<Sprite name scale>` at
 integer scales only; give meaningful sprites an accessible label at the call site.
 
-Already built, so do not redo: the moderation set (`icon-hide-message`, `icon-restore`, `icon-lift`, `icon-claim`, `icon-users`, `icon-gavel`, `icon-ledger`, `icon-ban`, `icon-mute`,
+Already built, so do not redo: the Phase 5 set (see the table), the moderation set (`icon-hide-message`, `icon-restore`, `icon-lift`, `icon-claim`, `icon-users`, `icon-gavel`, `icon-ledger`, `icon-ban`, `icon-mute`,
 `icon-scales`, `icon-report-queue`, `icon-eye-review`, `guild-hall-banner-32`), `icon-flag` for reports, `icon-block`
 and `icon-unblock`, `icon-user-add`, `icon-user-check`, `icon-user-remove`, `icon-chat`, `icon-mail`,
 `icon-mail-incoming`, `icon-accept`, `icon-decline`, `icon-copy`, `icon-link`, rank medals, role icons, seat frames,
@@ -704,8 +676,7 @@ platform glyphs, and the avatars `avatar-01` to `avatar-12`.
 
 | Phase | Needed (16 px unless noted) | Used for |
 |---|---|---|
-| 5 | `icon-send`, `icon-emoji`, emotes `emote-gg`, `emote-wave`, `emote-laugh`, `emote-cheer`, `emote-sad`, `emote-heart`, `emote-fire`, `emote-gg-wp`; optional `icon-unread` | chat composer, emote picker, unread dot |
-| 5 | badge medals, 32 px: one each for `Veteran`, `Great Teammate`, `Mentor` (the three rows in `badge`; confirm with `SELECT name FROM badge`) | character sheet currently shows text and generic markers |
+| 5 (built) | `icon-send`, `icon-emoji`, emotes `emote-gg`, `emote-wave`, `emote-laugh`, `emote-cheer`, `emote-sad`, `emote-heart`, `emote-fire`, `emote-gg-wp`, and badge medals `badge-veteran`, `badge-great-teammate`, `badge-mentor` | chat composer, emote picker, character sheet badges; `icon-unread` was not needed because unread counts were cut |
 | 11 (Discord) | none (the existing `icon-discord` is an original glyph, not the Discord logo) | Discord button |
 | 7 | `icon-sound-on`, `icon-sound-off`, `icon-motion-on`, `icon-motion-off`; cat poses `mascot-cat-wave`, `mascot-cat-sleep`, `mascot-cat-sad` (32 px) for empty and error states; decorations `deco-cloud`, `deco-tree`, `deco-tent`, `deco-lantern`; optional `avatar-13` to `avatar-16` | polish; update the modulo in `Avatar.tsx` if you add avatars |
 
@@ -716,7 +687,7 @@ A phase is done when every line holds.
 **Database**
 
 - New procedures follow the pattern in section 7 and are granted to the right role in `04_rbac.sql`.
-- Direct grants that the procedures replace are revoked, and a probe proves it (Phase 6 did this for report, sanction and message moderation).
+- Direct grants that the procedures replace are revoked, and a probe proves it (Phases 6 and 5 did this for report, sanction, message moderation, chat and review).
 - `./database/setup.sh ... --tests` reports every row PASS (the total goes up; no FAIL rows).
 - Seed and `setup.sh` file list updated if you added a file; ER generator updated if you added a table.
 - `bun run check:db` still passes, with new probes for new privileges.
@@ -739,9 +710,9 @@ A phase is done when every line holds.
 
 - README: counts, load order, the "What it does" table and the "Status and known gaps" section.
 - `documents/DEMO.md`: counts, plus any step your change breaks. The sanction step is already fixed: it shows the
-  denied direct `INSERT` as `pd_mod`, then `sp_issue_sanction` and `sp_lift_sanction`. Known remaining case: the RBAC step
-  that runs `SELECT COUNT(*) FROM message` as `pd_api` ("allowed") stops being true if you revoke the player's SELECT
-  in Phase 5; switch it to another table or flip the expectation. The MongoDB `docker exec ... mongosh` line changes
+  denied direct `INSERT` as `pd_mod`, then `sp_issue_sanction` and `sp_lift_sanction`. The RBAC step
+  that ran `SELECT COUNT(*) FROM message` as the player is fixed in Phase 5: it now shows the denied direct read, then
+  `CALL sp_chat_history(1, 3, NULL, 5)`. Known remaining case: the MongoDB `docker exec ... mongosh` line changes
   with Mongo auth.
 - This file: move the finished phase out of the "remaining" sections and update the counts.
 
@@ -752,15 +723,15 @@ A phase is done when every line holds.
 2. Read this file and the README's "Architecture" and "Status" sections. Skim `database/04_rbac.sql` and
    `database/09_sessions.sql`: they are the two files whose patterns you will copy.
 3. Check MySQL is up (`mysql.server start` on a Mac) and Docker is running (`docker ps` shows `pairadice-mongo`).
-4. Reload the database with a login path from section 4, with `--tests`. Expect 254 of 254 passed.
+4. Reload the database with a login path from section 4, with `--tests`. Expect 319 of 319 passed.
 5. `./vector/setup.sh`, then start the worker in a second terminal.
-6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (106 pass) and `bun run build`.
+6. In `web/`: `bun install`, then `bun run typecheck`, `bun run lint`, `bun test` (134 pass) and `bun run build`.
    Delete `web/.next` if typecheck shows errors in files you did not touch.
 7. `bun run dev:kc` (Mac) or the socket command (Linux) with `PAIRADICE_DEV_AUTH=1`. Visit `/hearth`, `/board`,
-   `/camp/10`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
+   `/camp/10`, `/camp/3` (chat), `/messages`, `/character/1`, `/friends`, `/mod` as user 9, and `/admin/vector` and `/admin/users` as user 10.
 8. Run `bun run check:db` (Mac with Keychain) to see the five logins prove their limits.
 9. Skim `database/12_moderation.sql` (the newest procedure file, a good pattern to copy) and open `/mod` as user 9.
-10. Branch, then build the first Phase 5 procedure and its tests before any UI.
+10. Branch, then start with the next item in section 3 (MongoDB authentication), tests first.
 
 ## 16. Known stale docs and unverified items
 
@@ -769,18 +740,19 @@ Corrected or found stale while writing this:
 - The old `docs/handoff.md` (local, gitignored) described a project around Phases 1 and 2. It said no root README, no
   per-role pools, no Phase 4, 48 tests, 46 sprites, a Mongo container that fails to start, and logins "in progress";
   all of that is out of date. Do not use it.
-- The root README counts were corrected in Phase 6: 41 procedures, 8 functions, 55 triggers, 1 event, 254 checks.
+- The root README counts were corrected in Phase 5: 51 procedures, 9 functions, 55 triggers, 1 event, 319 checks.
 - `web/README.md` is stale: it describes a read-only app with a "Sign-in arrives in Phase 2" gate, a single
   `MYSQL_PWD` login, and Phase 1 routes only. It was outside this handoff's scope; refresh it in Phase 7.
 - `bun run test` does not exist; the command is `bun test`.
-- Moderator and player reading `message` directly and the player's direct `INSERT` on `message` and `review`
-  (section 9) are real gaps until Phase 5. Closed in Phase 6: the unscheduled `sp_expire_sanctions` (now
-  `ev_expire_sanctions`) and the moderator and player direct grants on `report`, `sanction` and `message` moderation.
+- Closed: the player's direct `SELECT`/`INSERT` on `message` and `INSERT` on `review` (Phase 5), the unscheduled
+  `sp_expire_sanctions` (now `ev_expire_sanctions`) and the direct grants on `report`, `sanction` and message
+  moderation (Phase 6). No direct player or moderator write grants remain.
+- Open: the two `message` indexes in section 9 need the owner's OK; unread counts and websockets are not built.
 - Seed users cannot sign in with a password (placeholder hashes). Only `/sign-up` accounts and the dev switch work.
 
-Not verified on 2026-11-10:
+Not verified on 2026-11-11:
 
-- The live MySQL state beyond the `--tests` run (254 of 254). Reload and rerun it first.
+- The live MySQL state beyond the `--tests` run (319 of 319). Reload and rerun it first.
 - The Keychain item names `pairadice/mongo_root`, `mongo_api` and `mongo_worker`, and the two Discord items. They come
   from the owner's notes; the loader only knows `pd_web`, `pd_auth`, `pd_api`, `pd_mod`, `pd_admin` and `auth_secret`.
 - That MongoDB authentication works end to end after the port; the branch version was never verified live.

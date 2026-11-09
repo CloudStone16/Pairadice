@@ -16,7 +16,7 @@ cd Pairadice
 ADMIN=<your MySQL admin login>          # e.g. root, or your auth_socket admin login
 SOCK=/var/run/mysqld/mysqld.sock
 
-./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 254/254 passed
+./database/setup.sh -u "$ADMIN" -S "$SOCK" -y --tests --socket-logins "$USER"   # reports 319/319 passed
 ./vector/setup.sh                                                               # needs Docker running
 ```
 
@@ -108,12 +108,12 @@ the other kinds of constraint:
   session's game.
 
 ```bash
-grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 204, plus 50 behaviour rows = 254
+grep -cE "^CALL t_(expect_error|expect_msg|probe)" database/06_constraint_tests.sql   # 255, plus 64 behaviour rows = 319
 grep -o "t_expect_error('[^']*'" database/06_constraint_tests.sql | head -12
 ```
 
-> "254 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
-> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 254/254 passed."
+> "319 checks: statements the database **must reject**, exact-error-text assertions, grant probes and behaviour
+> checks, covering CHECKs, FKs, triggers, RBAC and procedure rules. The setup run ended with 319/319 passed."
 
 ## 2:30 – 4:00 · DML and queries (4 marks)
 
@@ -173,7 +173,7 @@ lift he is `active` again with a `sanction lift` row that carries the reason.
 > "The moderator has no INSERT on `sanction` and no UPDATE on `report`. Every write goes through a procedure that
 > checks `fn_has_permission`, the staff rank (a moderator cannot sanction staff), conflict of interest and duration
 > limits, then lets the triggers flip the status and write the audit log. A player cannot issue a sanction, and a
-> moderator cannot issue a **ban**; only admins hold `user.ban`. All of that is among the 254 checks."
+> moderator cannot issue a **ban**; only admins hold `user.ban`. All of that is among the 319 checks."
 
 **Transaction with a row lock.** `sp_accept_participant` locks the session row (`SELECT … FOR UPDATE`) before it
 fills a seat, so two accepts at the same moment cannot overbook. You will see it live in the UI step below.
@@ -193,7 +193,8 @@ With password logins, the sharpest one-liner is the same query as two logins (ad
 
 ```bash
 pd -u pd_web -e "SELECT COUNT(*) FROM message"   # ERROR 1142: SELECT command denied
-pd -u pd_api -e "SELECT COUNT(*) FROM message"   # allowed
+pd -u pd_api -e "SELECT COUNT(*) FROM message"   # ERROR 1142: SELECT command denied (the player has no direct read either)
+pd -u pd_api -e "CALL sp_chat_history(1, 3, NULL, 5)"   # the same data, through the procedure: only Aarav's camp 3 lines
 ```
 
 Then let the script prove every login at once:
@@ -205,7 +206,7 @@ cd web && bun run check:db     # each login's identity, one forbidden action eac
 > "Anonymous page reads use `pairadice_web_ro`, which cannot see the credentials table, private messages,
 > friendships or blocks, and cannot run the recommender. A signed-in request, read or write, runs on the viewer's own
 > role login and fails closed to the anonymous one if the session does not match. The player role has no direct DML
-> on sessions or friendships; it writes only through DEFINER procedures, which refuse NULL or suspended actors. The
+> on any table, not even reading or inserting `message`; it reads and writes only through DEFINER procedures, which refuse NULL or suspended actors and return only the caller's own conversations. The
 > admin role has no DDL and no GRANT OPTION. Only `pairadice_auth` touches `auth_account` and `auth_token`, so even
 > an SQL-injection bug in a page read could not reach a password hash."
 
@@ -263,6 +264,11 @@ delete steps and prints each one.
 5. Go to `/friends`, search `lu`, and click **Add friend** on Lukas (`sp_send_friend_request`). Then use **Cancel
    request**. Blocked and suspended players never appear in search, and the procedures refuse them anyway.
 
+6. **Chat.** As **1 `aarav_plays`**, open `/camp/3` and send `gg :gg:` (the token shows as a sprite). In a second tab
+   as **2 `priya_gg`**, open `/camp/3`: the line appears within 4 seconds (the page polls
+   `GET /api/chat/3?after=ID`). Then open `/messages/8` as Aarav to show a DM thread with Rohan (`sp_send_dm`: allowed
+   because they are friends). Optional: on a completed camp, show the "Rate your party" panel (`sp_write_review`).
+
 Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is time.
 
 > "Pages are server components reading MySQL directly with parameterised SQL. Every form is a server action that
@@ -273,8 +279,9 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 
 - Docs: the README (architecture, technology justification, rubric map) and this script. Git history: small,
   focused commits for each piece.
-- Honest gaps: Discord login and chat sending (Phase 5) are not built yet, and the player still has direct INSERT on
-  `message` and `review` until then. MongoDB runs without authentication on localhost.
+- Honest gaps: Discord login is not built, MongoDB runs without authentication on localhost, chat polls every 4
+  seconds instead of using websockets, and unread counts are not built. Two `message` indexes are possible but not
+  applied, because existing tables are not to be altered.
 
 ---
 
@@ -288,4 +295,4 @@ Hosting a new quest at `/camp/new` (`sp_create_session`) also works, if there is
 | "Upcoming" sessions are in the past | Reload: `./database/setup.sh … -y --tests`, then `./vector/setup.sh` |
 | "Knock to join" refused after an earlier rehearsal | Aarav is already in camp 10; reload the database |
 | "You already reported this player" | Aarav has an open report on Jake from a rehearsal; reload the database |
-| Test summary below 254/254 | Reload once and rerun before investigating |
+| Test summary below 319/319 | Reload once and rerun before investigating |
