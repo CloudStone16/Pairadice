@@ -18,6 +18,7 @@ DROP PROCEDURE IF EXISTS sp_withdraw_or_leave;
 DROP PROCEDURE IF EXISTS sp_decline_participant;
 DROP PROCEDURE IF EXISTS sp_kick_participant;
 DROP PROCEDURE IF EXISTS sp_set_session_status;
+DROP PROCEDURE IF EXISTS sp_my_platform_accounts;
 
 DELIMITER $$
 
@@ -297,6 +298,16 @@ BEGIN                                                        -- start, cancel or
   UPDATE lfg_session SET status = p_status WHERE session_id = p_session_id;   -- trigger: audit row, counters, badges
   SET @audit_actor = NULL;
   COMMIT;
+END$$
+
+-- The player login has no SELECT on platform_account (gamertags are private), so a player reads only
+-- their own accounts, through this procedure, when choosing which account to host or join with.
+CREATE PROCEDURE sp_my_platform_accounts(IN p_actor_id BIGINT UNSIGNED)
+BEGIN
+  SELECT pa.account_id, pa.platform_id, p.name AS platform, pa.handle, pa.discriminator, pa.is_verified
+    FROM platform_account pa JOIN platform p ON p.platform_id = pa.platform_id
+   WHERE pa.user_id = p_actor_id
+   ORDER BY p.name, pa.handle;
 END$$
 
 DELIMITER ;

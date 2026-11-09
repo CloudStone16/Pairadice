@@ -41,6 +41,7 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_withdraw_or_leave TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_decline_participant TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_kick_participant TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_set_session_status TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_my_platform_accounts TO 'pairadice_player';
 -- hybrid (SQL + vector) recommendations are logged by the API, and outcomes updated as the player acts
 GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pairadice_player';
 
@@ -85,6 +86,8 @@ GRANT SELECT, UPDATE, DELETE ON pairadice.embedding_outbox TO 'pairadice_vec_wor
 GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at, trust_score, avg_rating)
   ON pairadice.users TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.game                TO 'pairadice_web_ro';
+GRANT SELECT ON pairadice.platform            TO 'pairadice_web_ro';   -- catalogue: names and identity labels only
+GRANT SELECT ON pairadice.game_platform       TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.game_mode           TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.rank_tier           TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.game_role           TO 'pairadice_web_ro';
