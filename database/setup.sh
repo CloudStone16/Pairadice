@@ -23,6 +23,7 @@ WEB_USER=""
 AUTH_USER=""
 MOD_USER=""
 ADMIN_USER=""
+WORKER_USER=""
 SOCKET_LOGINS_FOR=""
 
 usage() {
@@ -50,8 +51,9 @@ What to load:
       --app-user NAME   ... with the pairadice_player role (signed-in players)
       --mod-user NAME   ... with the pairadice_moderator role
       --admin-user NAME ... with the pairadice_admin role (DML + EXECUTE, no DDL)
+      --worker-user NAME ... with the pairadice_vec_worker role (MongoDB sync worker and backfill)
                         Login options need RBAC and NAMEs must all differ. Each password is read from
-                        \$PD_WEB_PWD, \$PD_AUTH_PWD, \$PD_APP_PWD, \$PD_MOD_PWD or \$PD_ADMIN_PWD when set,
+                        \$PD_WEB_PWD, \$PD_AUTH_PWD, \$PD_APP_PWD, \$PD_MOD_PWD, \$PD_ADMIN_PWD or \$PD_WORKER_PWD when set,
                         otherwise prompted for (input hidden). Re-running resets the password.
       --socket-logins OSUSER
                         also create passwordless per-role logins for local development, mapped to
@@ -103,6 +105,7 @@ while [[ $# -gt 0 ]]; do
     --auth-user)     AUTH_USER="${2:?missing value for $1}"; shift 2 ;;
     --mod-user)      MOD_USER="${2:?missing value for $1}"; shift 2 ;;
     --admin-user)    ADMIN_USER="${2:?missing value for $1}"; shift 2 ;;
+    --worker-user)   WORKER_USER="${2:?missing value for $1}"; shift 2 ;;
     --socket-logins) SOCKET_LOGINS_FOR="${2:?missing value for $1}"; shift 2 ;;
     --start-server)  START_SERVER=1; shift ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
@@ -111,15 +114,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for pair in "app:$APP_USER" "web:$WEB_USER" "auth:$AUTH_USER" "mod:$MOD_USER" "admin:$ADMIN_USER"; do
+for pair in "app:$APP_USER" "web:$WEB_USER" "auth:$AUTH_USER" "mod:$MOD_USER" "admin:$ADMIN_USER" "worker:$WORKER_USER"; do
   [[ "${pair#*:}" =~ ^[A-Za-z0-9_]{1,32}$ || -z "${pair#*:}" ]] \
     || die "--${pair%%:*}-user must be 1-32 letters, digits or underscores"
 done
 _named=()
-for n in "$APP_USER" "$WEB_USER" "$AUTH_USER" "$MOD_USER" "$ADMIN_USER"; do
+for n in "$APP_USER" "$WEB_USER" "$AUTH_USER" "$MOD_USER" "$ADMIN_USER" "$WORKER_USER"; do
   [[ -z "$n" ]] && continue
   for m in ${_named[@]+"${_named[@]}"}; do
-    [[ "$m" != "$n" ]] || die "--app-user, --web-user, --auth-user, --mod-user and --admin-user must all be different logins."
+    [[ "$m" != "$n" ]] || die "--app-user, --web-user, --auth-user, --mod-user, --admin-user and --worker-user must all be different logins."
   done
   _named+=("$n")
 done
@@ -257,6 +260,7 @@ create_login web-user   "$WEB_USER"   pairadice_web_ro    PD_WEB_PWD
 create_login auth-user  "$AUTH_USER"  pairadice_auth      PD_AUTH_PWD
 create_login mod-user   "$MOD_USER"   pairadice_moderator PD_MOD_PWD
 create_login admin-user "$ADMIN_USER" pairadice_admin     PD_ADMIN_PWD
+create_login worker-user "$WORKER_USER" pairadice_vec_worker PD_WORKER_PWD
 
 # ---------------------------------------------------------------- optional local socket logins
 # One passwordless login per role, so the web app can connect as a different MySQL user depending on

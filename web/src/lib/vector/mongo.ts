@@ -17,11 +17,17 @@ export const COLLECTION_NAMES = { players: "player_embeddings", sessions: "sessi
 export const INDEX_NAMES = { players: "player_vec_idx", sessions: "session_vec_idx" } as const;
 export type VectorKind = keyof typeof COLLECTION_NAMES;
 
+let warnedNoUri = false;
+
 function mongoUri(): string {
   const uri = process.env.MONGO_URI;
   if (uri) return uri;
   if (process.env.NODE_ENV === "production") {
     throw new Error("MONGO_URI is required in production (no default; set it in the environment).");
+  }
+  if (!warnedNoUri) {
+    warnedNoUri = true;
+    console.warn("MONGO_URI is not set; using the unauthenticated development default. MongoDB authentication is expected, so the Vector Lab will show Mongo as unavailable until MONGO_URI (pdApi) is set, e.g. via scripts/dev-keychain.sh.");
   }
   return DEV_DEFAULT_URI;
 }
