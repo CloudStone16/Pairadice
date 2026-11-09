@@ -1,18 +1,21 @@
 import "server-only";
-import mysql, { type Pool, type RowDataPacket } from "mysql2/promise";
+import mysql, { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
+import { LOGIN_SUFFIX, POOL_LIMIT, type DbLogin } from "./db-roles";
 
 // Read-only data layer for the web app. Credentials come from env vars only
 // (see .env.example); the password is never stored in a file.
 
 declare global {
   // globalThis augmentation needs `var`
-  var __pairadiceMysqlPool: Pool | undefined;
+  var __pairadiceMysqlPools: Partial<Record<DbLogin, Pool>> | undefined;
   var __pairadiceRootWarned: boolean | undefined;
 }
 
 /** Values the app may bind. Numbers must be safe integers (ids, limits). */
-export type SqlParam = string | number | boolean | null | readonly number[];
+export type SqlParam = string | number | boolean | null | readonly number[] | Buffer;
 export type SqlParams = ReadonlyArray<SqlParam>;
+
+export type { DbLogin } from "./db-roles";
 
 const READ_ONLY_USER = "pairadice_web_ro";
 const QUERY_TIMEOUT_MS = 15_000;
@@ -27,38 +30,47 @@ function readPort(): number {
   return port;
 }
 
-function readUser(): string {
+function readUser(login: DbLogin): string {
   const isProd = process.env.NODE_ENV === "production";
-  const user = process.env.MYSQL_USER;
+  const suffix = LOGIN_SUFFIX[login];
+  let user = process.env[`PD_DB_USER_${suffix}`];
+  if ((user === undefined || user === "") && login === "web") user = process.env.MYSQL_USER;
   if (isProd && (user === undefined || user === "" || user.toLowerCase() === "root")) {
     throw new Error(
-      `Refusing to connect as root in production. Set MYSQL_USER=${READ_ONLY_USER} (created by database/setup.sh --web-user).`,
+      `Refusing to connect as root in production. Set PD_DB_USER_${suffix} to a non-root login (web: ${READ_ONLY_USER}, created by database/setup.sh).`,
     );
   }
-  const resolved = user === undefined || user === "" ? "root" : user;
-  if (resolved.toLowerCase() === "root" && !globalThis.__pairadiceRootWarned) {
+  if (user === undefined || user === "") {
+    if (login !== "web") {
+      throw new Error(`PD_DB_USER_${suffix} is not set; the "${login}" database login has no default.`);
+    }
+    user = "root";
+  }
+  if (user.toLowerCase() === "root" && !globalThis.__pairadiceRootWarned) {
     globalThis.__pairadiceRootWarned = true;
     console.warn(
-      `[pairadice] Connecting to MySQL as root. Prefer the read-only login: MYSQL_USER=${READ_ONLY_USER} (database/setup.sh --web-user).`,
+      `[pairadice] Connecting to MySQL as root. Prefer a role login (PD_DB_USER_${suffix}, see .env.example).`,
     );
   }
-  return resolved;
+  return user;
 }
 
-function createPool(): Pool {
+function createPool(login: DbLogin): Pool {
   // MYSQL_SOCKET selects a passwordless auth_socket login; otherwise TCP with a password.
   const socketPath = process.env.MYSQL_SOCKET;
-  const password = process.env.MYSQL_PWD;
+  const suffix = LOGIN_SUFFIX[login];
+  let password = process.env[`PD_DB_PWD_${suffix}`];
+  if ((password === undefined || password === "") && login === "web") password = process.env.MYSQL_PWD;
   if (!socketPath && (password === undefined || password === "")) {
     throw new Error(
-      "Neither MYSQL_SOCKET nor MYSQL_PWD is set. Export one in the shell before starting the app, e.g. `MYSQL_PWD=... bun run dev`. Credentials are never stored in files.",
+      `Neither MYSQL_SOCKET nor PD_DB_PWD_${suffix} is set. Export one in the shell before starting the app. Credentials are never stored in files.`,
     );
   }
   const pool = mysql.createPool({
     ...(socketPath
       ? { socketPath }
       : { host: process.env.MYSQL_HOST ?? "127.0.0.1", port: readPort(), password }),
-    user: readUser(),
+    user: readUser(login),
     database: process.env.MYSQL_DATABASE ?? "pairadice",
     charset: "utf8mb4_0900_ai_ci",
     timezone: "Z",
@@ -66,7 +78,7 @@ function createPool(): Pool {
     dateStrings: true,
     decimalNumbers: true,
     stringifyObjects: true,
-    connectionLimit: 10,
+    connectionLimit: POOL_LIMIT[login],
     queueLimit: 200,
     connectTimeout: 10_000,
     enableKeepAlive: true,
@@ -81,18 +93,23 @@ function createPool(): Pool {
   return pool;
 }
 
-/** Lazily created pool; cached on globalThis so dev HMR does not leak connections. */
+/** One lazily created pool per login; cached on globalThis so dev HMR does not leak connections. */
+export function poolFor(login: DbLogin): Pool {
+  const pools = (globalThis.__pairadiceMysqlPools ??= {});
+  return (pools[login] ??= createPool(login));
+}
+
+/** The "web" (read-only) pool. */
 export function getPool(): Pool {
-  if (!globalThis.__pairadiceMysqlPool) {
-    globalThis.__pairadiceMysqlPool = createPool();
-  }
-  return globalThis.__pairadiceMysqlPool;
+  return poolFor("web");
 }
 
 function checkParams(params: SqlParams): void {
   for (const p of params) {
     if (typeof p === "number") {
       if (!Number.isSafeInteger(p)) throw new Error(`SQL parameter is not a safe integer: ${p}`);
+    } else if (Buffer.isBuffer(p)) {
+      continue;
     } else if (Array.isArray(p)) {
       if (p.length === 0) throw new Error("SQL list parameter must not be empty");
       for (const n of p) {
@@ -105,7 +122,7 @@ function checkParams(params: SqlParams): void {
 /** Run a parameterised SELECT and return its rows. */
 export async function query<T extends object>(sql: string, params: SqlParams = []): Promise<T[]> {
   checkParams(params);
-  const [rows] = await getPool().query<Array<T & RowDataPacket>>({
+  const [rows] = await poolFor("web").query<Array<T & RowDataPacket>>({
     sql,
     values: [...params],
     timeout: QUERY_TIMEOUT_MS,
@@ -120,7 +137,7 @@ export async function query<T extends object>(sql: string, params: SqlParams = [
  */
 export async function callProc<T extends object>(sql: string, params: SqlParams = []): Promise<T[]> {
   checkParams(params);
-  const [result] = await getPool().query<Array<Array<T & RowDataPacket>>>({
+  const [result] = await poolFor("web").query<Array<Array<T & RowDataPacket>>>({
     sql,
     values: [...params],
     timeout: QUERY_TIMEOUT_MS,
@@ -130,4 +147,57 @@ export async function callProc<T extends object>(sql: string, params: SqlParams 
     throw new Error("Unexpected result shape from CALL: expected a result set.");
   }
   return result[0];
+}
+
+/** Run a parameterised SELECT through the given login's pool. */
+export async function queryAs<T extends object>(
+  login: DbLogin,
+  sql: string,
+  params: SqlParams = [],
+): Promise<T[]> {
+  checkParams(params);
+  const [rows] = await poolFor(login).query<Array<T & RowDataPacket>>({
+    sql,
+    values: [...params],
+    timeout: QUERY_TIMEOUT_MS,
+  });
+  if (!Array.isArray(rows)) throw new Error("Unexpected MySQL result: expected a row array.");
+  return rows;
+}
+
+/** Run a parameterised INSERT/UPDATE/DELETE through the given login's pool. */
+export async function execAs(login: DbLogin, sql: string, params: SqlParams = []): Promise<ResultSetHeader> {
+  checkParams(params);
+  const [result] = await poolFor(login).query<ResultSetHeader>({
+    sql,
+    values: [...params],
+    timeout: QUERY_TIMEOUT_MS,
+  });
+  if (Array.isArray(result)) throw new Error("Unexpected MySQL result: expected a result header.");
+  return result;
+}
+
+/** Run fn on one connection inside BEGIN/COMMIT; ROLLBACK on error; the connection is always released. */
+export async function transactionAs<R>(
+  login: DbLogin,
+  fn: (conn: PoolConnection) => Promise<R>,
+): Promise<R> {
+  const conn = await poolFor(login).getConnection();
+  try {
+    await conn.beginTransaction();
+    try {
+      const result = await fn(conn);
+      await conn.commit();
+      return result;
+    } catch (err) {
+      try {
+        await conn.rollback();
+      } catch (rollbackErr) {
+        console.error("[pairadice] rollback failed:", rollbackErr);
+      }
+      throw err;
+    }
+  } finally {
+    conn.release();
+  }
 }
