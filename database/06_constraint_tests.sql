@@ -64,8 +64,6 @@ CALL t_expect_error('OUTBOX: platform_account delete enqueues its user',
 UPDATE embedding_outbox SET attempts = 5, last_error = 'probe' WHERE entity = 'player' AND entity_id = 1;
 CALL t_expect_error('OUTBOX: v_outbox_dead lists a row at attempts >= 5',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM v_outbox_dead WHERE entity = 'player' AND entity_id = 1 AND attempts = 5)");
-CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
-CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
 -- ---- encoding / UTC / web-role guards.
 -- Probe pattern: "INSERT ... SELECT 'en', ... WHERE <healthy condition>" collides with the existing language 'en'
 -- (duplicate PK) only when the condition holds, so the probe is REJECTED (= PASS) when the database is healthy
@@ -81,6 +79,12 @@ CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
 CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
 ROLLBACK;
+
+-- ---- procedures that open their own transaction. START TRANSACTION inside a procedure implicitly commits
+-- the test transaction above, which would make its probes' writes permanent, so these run after the
+-- ROLLBACK. Each one is rejected before it writes anything.
+CALL t_expect_error('PROC: accept into a full session',   "CALL sp_accept_participant(5, 12, 7)");
+CALL t_expect_error('PROC: non-host accepts a player',    "CALL sp_accept_participant(10, 1, 8)");
 
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
