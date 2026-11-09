@@ -78,6 +78,11 @@ CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT')");
 CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
+-- recommendation feedback: accepting a recommended player marks their recommendation 'joined'
+INSERT INTO match_recommendation (user_id, session_id, score, source) VALUES (2, 1, 0.5000, 'sql');
+UPDATE session_participant SET status = 'accepted' WHERE session_id = 1 AND user_id = 2;
+CALL t_expect_error('TRIGGER: accepting a recommended player records outcome joined',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE EXISTS (SELECT 1 FROM match_recommendation WHERE user_id = 2 AND session_id = 1 AND outcome = 'joined')");
 ROLLBACK;
 
 -- ---- procedures that open their own transaction. START TRANSACTION inside a procedure implicitly commits

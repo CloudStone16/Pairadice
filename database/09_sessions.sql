@@ -19,6 +19,8 @@ DROP PROCEDURE IF EXISTS sp_decline_participant;
 DROP PROCEDURE IF EXISTS sp_kick_participant;
 DROP PROCEDURE IF EXISTS sp_set_session_status;
 DROP PROCEDURE IF EXISTS sp_my_platform_accounts;
+DROP TRIGGER IF EXISTS trg_participant_ai_rec;
+DROP TRIGGER IF EXISTS trg_participant_au_rec;
 
 DELIMITER $$
 
@@ -308,6 +310,28 @@ BEGIN
     FROM platform_account pa JOIN platform p ON p.platform_id = pa.platform_id
    WHERE pa.user_id = p_actor_id
    ORDER BY p.name, pa.handle;
+END$$
+
+-- Close the recommendation feedback loop: when a player becomes an accepted member of a session that
+-- was recommended to them, their latest recommendation row for it records 'joined'. A trigger catches
+-- every path (host accept, auto-join, moderator), and the host's login never needs UPDATE rights on
+-- other players' match_recommendation rows.
+CREATE TRIGGER trg_participant_ai_rec AFTER INSERT ON session_participant FOR EACH ROW FOLLOWS trg_participant_ai
+BEGIN
+  IF NEW.status = 'accepted' THEN
+    UPDATE match_recommendation SET outcome = 'joined'
+     WHERE user_id = NEW.user_id AND session_id = NEW.session_id AND outcome <> 'joined'
+     ORDER BY shown_at DESC, rec_id DESC LIMIT 1;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_participant_au_rec AFTER UPDATE ON session_participant FOR EACH ROW FOLLOWS trg_participant_au
+BEGIN
+  IF NEW.status = 'accepted' AND OLD.status <> 'accepted' THEN
+    UPDATE match_recommendation SET outcome = 'joined'
+     WHERE user_id = NEW.user_id AND session_id = NEW.session_id AND outcome <> 'joined'
+     ORDER BY shown_at DESC, rec_id DESC LIMIT 1;
+  END IF;
 END$$
 
 DELIMITER ;
