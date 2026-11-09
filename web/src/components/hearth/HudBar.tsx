@@ -1,15 +1,25 @@
 import Link from "next/link";
-import { Avatar, Meter, Sprite } from "@/components/ui";
+import { signOut } from "@/app/(auth)/actions";
+import { Avatar, Chip, Meter, Sprite } from "@/components/ui";
+import type { AppRole } from "@/lib/db-roles";
 import type { UserLite } from "@/lib/types";
 import { DevUserSwitch } from "./DevUserSwitch";
 import { NavTabs } from "./NavTabs";
 
 const PRESENCE_WORD = { online: "Online", away: "Away", suspended: "Suspended" } as const;
 
-export function HudBar({ user }: { user: UserLite }) {
+export interface HudViewer {
+  source: "session" | "dev";
+  roles: AppRole[];
+}
+
+export function HudBar({ user, viewer }: { user: UserLite; viewer: HudViewer }) {
+  const isAdmin = viewer.roles.includes("admin");
+  const isMod = isAdmin || viewer.roles.includes("moderator");
+  const fromSession = viewer.source === "session";
   return (
     <header className="z-40 bg-dusk lg:sticky lg:top-0">
-      <DevUserSwitch currentId={user.user_id} />
+      {fromSession ? null : <DevUserSwitch currentId={user.user_id} />}
       <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-x-6 gap-y-0 px-4 py-1 lg:py-2">
         {/* below lg: logo and character share row one, the menu is row two. lg:order-* restores the desktop layout */}
         <div className="order-1 flex min-w-0 flex-1 flex-nowrap items-center justify-between gap-3 lg:contents">
@@ -20,11 +30,17 @@ export function HudBar({ user }: { user: UserLite }) {
             </span>
           </Link>
 
+          <div className="order-2 ml-auto flex shrink-0 items-center gap-2 lg:order-3">
+          {isMod ? (
+            <Chip tone="lavender" icon={<Sprite name="icon-shield" />} className="hidden sm:inline-flex">
+              {isAdmin ? "Admin" : "Moderator"}
+            </Chip>
+          ) : null}
           <Link
             href="/character"
             // the name starts with the visible text ("Aarav Trust 71"), so it satisfies Label in Name (WCAG 2.5.3)
             aria-label={`${user.display_name} Trust ${user.trust_score}, ${PRESENCE_WORD[user.presence]} — your character sheet`}
-            className="order-2 ml-auto flex shrink-0 items-center gap-3 rounded-pill bg-plum p-1 ring-1 ring-lavender/40 transition-colors hover:bg-plum-2 sm:py-1.5 sm:pl-2 sm:pr-4 lg:order-3"
+            className="flex shrink-0 items-center gap-3 rounded-pill bg-plum p-1 ring-1 ring-lavender/40 transition-colors hover:bg-plum-2 sm:py-1.5 sm:pl-2 sm:pr-4"
           >
             <Avatar userId={user.user_id} size={32} status={user.presence} statusText={false} />
             <span className="hidden flex-col leading-tight sm:flex">
@@ -34,10 +50,23 @@ export function HudBar({ user }: { user: UserLite }) {
               </span>
             </span>
           </Link>
+          {fromSession ? (
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="flex min-h-10 items-center gap-1.5 rounded-pill bg-plum-2 px-3 font-display text-sm font-semibold text-cream ring-1 ring-inset ring-lavender/50 hover:bg-plum"
+              >
+                <Sprite name="icon-door" />
+                <span className="sr-only sm:not-sr-only">Sign out</span>
+                <span className="sr-only sm:hidden">Sign out</span>
+              </button>
+            </form>
+          ) : null}
+          </div>
         </div>
 
         <div className="order-2 w-full lg:order-2 lg:w-auto lg:flex-1">
-          <NavTabs />
+          <NavTabs showGuildHall={isMod} />
         </div>
       </div>
       {/* wooden beam with an ember highlight; the 4px ink line below closes the HUD */}

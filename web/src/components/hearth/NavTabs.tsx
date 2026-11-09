@@ -25,6 +25,8 @@ const TABS: Tab[] = [
   { href: "/character", label: "Character", short: "Me", icon: "icon-character", exact: true },
 ];
 
+const GUILD_TAB: Tab = { href: "/mod", label: "Guild Hall", short: "Guild", icon: "icon-shield" };
+
 const isUnder = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
 
 /**
@@ -32,12 +34,13 @@ const isUnder = (pathname: string, base: string) => pathname === base || pathnam
  * The current page gets aria-current="page"; a quest's camp page marks the Quest Board tab
  * with aria-current="location" and a quieter ember underline.
  */
-export function NavTabs() {
+export function NavTabs({ showGuildHall = false }: { showGuildHall?: boolean }) {
   const pathname = usePathname();
+  const tabs = showGuildHall ? [...TABS, GUILD_TAB] : TABS;
   return (
     <nav aria-label="Main menu" className="py-1">
       <ul role="list" className="flex flex-nowrap items-stretch justify-between gap-1 lg:justify-start lg:gap-1.5">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = tab.exact ? pathname === tab.href : isUnder(pathname, tab.href);
           const inSection = !active && tab.within !== undefined && isUnder(pathname, tab.within);
           const current = active ? "page" : inSection ? "location" : undefined;
