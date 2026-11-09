@@ -631,6 +631,183 @@ INSERT INTO tmp_test_results SELECT 'CLEANUP: moderation test data is removed an
   IF((SELECT COUNT(*) FROM report) = @m_r0 AND (SELECT COUNT(*) FROM sanction) = 2 AND (SELECT is_deleted FROM message WHERE message_id = 4) = 0
      AND (SELECT status FROM users WHERE user_id = 12) = 'active' AND fn_staff_rank(3) = 0 AND fn_staff_rank(9) = 1 AND fn_staff_rank(10) = 2, 'PASS', 'FAIL'), NULL;
 
+-- ---- Chat, DMs and reviews (13_chat.sql). These procedures COMMIT, so everything created below is deleted again at
+-- the end (ids above the saved maxima, the two review rows by key) and the counters the review triggers move are restored.
+-- The read procedures return result sets, which plain SQL cannot capture; their rules are covered by fn_dm_refusal
+-- here and by the refusals below.
+SELECT IFNULL(MAX(message_id), 0)  INTO @c_m0 FROM message;
+SELECT IFNULL(MAX(sanction_id), 0) INTO @c_s0 FROM sanction;
+SELECT IFNULL(MAX(log_id), 0)      INTO @c_a0 FROM audit_log;
+SELECT COUNT(*) INTO @c_rv0 FROM review;
+SELECT IFNULL(MAX(report_id), 0)   INTO @c_r0 FROM report;
+SELECT review_count INTO @c_rc2 FROM users WHERE user_id = 2;
+SELECT status INTO @c_st5 FROM users WHERE user_id = 5;
+DROP TEMPORARY TABLE IF EXISTS c_outbox;
+DROP TEMPORARY TABLE IF EXISTS c_users;
+DROP TEMPORARY TABLE IF EXISTS c_badges;
+CREATE TEMPORARY TABLE c_outbox AS SELECT * FROM embedding_outbox;
+CREATE TEMPORARY TABLE c_users  AS SELECT user_id, avg_rating, review_count, trust_score FROM users;
+CREATE TEMPORARY TABLE c_badges AS SELECT * FROM user_badge;
+
+-- refusals: content
+CALL t_expect_msg('CHAT: session message with a NULL actor',   "CALL sp_send_session_message(NULL, 1, 'hi', @t_cid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: session message by a suspended actor', "CALL sp_send_session_message(11, 3, 'hi', @t_cid)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: empty session message',               "CALL sp_send_session_message(8, 1, '   ', @t_cid)", 'Write a message first.');
+CALL t_expect_msg('CHAT: NULL session message',                "CALL sp_send_session_message(8, 1, NULL, @t_cid)", 'Write a message first.');
+CALL t_expect_msg('CHAT: session message over 1000 characters', "CALL sp_send_session_message(8, 1, REPEAT('a', 1001), @t_cid)", 'Messages can be at most 1000 characters.');
+CALL t_expect_msg('CHAT: empty DM',                            "CALL sp_send_dm(1, 8, '', @t_cid)", 'Write a message first.');
+CALL t_expect_msg('CHAT: DM over 1000 characters',             "CALL sp_send_dm(1, 8, REPEAT('a', 1001), @t_cid)", 'Messages can be at most 1000 characters.');
+-- refusals: who may talk where
+CALL t_expect_msg('CHAT: session message to a camp you are not in', "CALL sp_send_session_message(6, 1, 'hi', @t_cid)", 'You are not in this camp.');
+CALL t_expect_msg('CHAT: session message while only requested',     "CALL sp_send_session_message(2, 1, 'hi', @t_cid)", 'You are not in this camp.');
+CALL t_expect_msg('CHAT: session message to an unknown camp',       "CALL sp_send_session_message(1, 99999, 'hi', @t_cid)", 'That camp does not exist.');
+CALL t_expect_msg('CHAT: session message in a cancelled camp',      "CALL sp_send_session_message(6, 6, 'hi', @t_cid)", 'This camp was cancelled, so its chat is closed.');
+CALL t_expect_msg('CHAT: history of a camp you are not in',         "CALL sp_chat_history(6, 1, NULL, 10)", 'You are not in this camp.');
+CALL t_expect_msg('CHAT: history with a NULL actor',                "CALL sp_chat_history(NULL, 1, NULL, 10)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: DM to a stranger',                         "CALL sp_send_dm(1, 5, 'hi', @t_cid)", 'You can message friends and teammates only.');
+CALL t_expect_msg('CHAT: DM across a block',                        "CALL sp_send_dm(1, 11, 'hi', @t_cid)", 'You cannot message this player.');
+CALL t_expect_msg('CHAT: DM to yourself',                           "CALL sp_send_dm(1, 1, 'hi', @t_cid)", 'You cannot message yourself.');
+CALL t_expect_msg('CHAT: DM to an unknown player',                  "CALL sp_send_dm(1, 99999, 'hi', @t_cid)", 'That player does not exist.');
+CALL t_expect_msg('CHAT: DM thread with a NULL actor',              "CALL sp_dm_thread(NULL, 8, NULL, 10)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: DM inbox with a NULL actor',               "CALL sp_dm_inbox(NULL)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: delete someone else''s message',           "CALL sp_delete_own_message(1, 7)", 'You can only remove your own messages.');
+CALL t_expect_msg('CHAT: delete an unknown message',                "CALL sp_delete_own_message(1, 99999)", 'That message does not exist.');
+CALL t_expect_msg('CHAT: delete with a NULL actor',                 "CALL sp_delete_own_message(NULL, 6)", 'Your account cannot do that right now.');
+INSERT INTO tmp_test_results SELECT 'CHAT: fn_dm_refusal (stranger, friends, teammates, blocked, self, unknown)',
+  IF(fn_dm_refusal(1, 5) = 'You can message friends and teammates only.' AND fn_dm_refusal(1, 8) IS NULL AND fn_dm_refusal(12, 8) IS NULL
+     AND fn_dm_refusal(1, 11) = 'You cannot message this player.' AND fn_dm_refusal(11, 1) = 'You cannot message this player.'
+     AND fn_dm_refusal(1, 1) = 'You cannot message yourself.' AND fn_dm_refusal(1, 99999) = 'That player does not exist.', 'PASS', 'FAIL'), NULL;
+-- refusals: reviews
+CALL t_expect_msg('CHAT: review with a NULL actor',           "CALL sp_write_review(NULL, 4, 2, 5, NULL)", 'Your account cannot do that right now.');
+CALL t_expect_msg('CHAT: review rating 0',                    "CALL sp_write_review(1, 4, 2, 0, NULL)", 'Choose a rating from 1 to 5 stars.');
+CALL t_expect_msg('CHAT: review rating 6',                    "CALL sp_write_review(1, 4, 2, 6, NULL)", 'Choose a rating from 1 to 5 stars.');
+CALL t_expect_msg('CHAT: review rating NULL',                 "CALL sp_write_review(1, 4, 2, NULL, NULL)", 'Choose a rating from 1 to 5 stars.');
+CALL t_expect_msg('CHAT: review comment over 500 characters', "CALL sp_write_review(1, 4, 2, 5, REPEAT('a', 501))", 'The comment must be 500 characters or fewer.');
+CALL t_expect_msg('CHAT: review yourself',                    "CALL sp_write_review(1, 4, 1, 5, NULL)", 'You cannot review yourself.');
+CALL t_expect_msg('CHAT: review in a camp that is not completed', "CALL sp_write_review(1, 1, 8, 5, NULL)", 'You can review a camp only after it is completed.');
+CALL t_expect_msg('CHAT: review a camp that does not exist',  "CALL sp_write_review(1, 99999, 8, 5, NULL)", 'That camp does not exist.');
+CALL t_expect_msg('CHAT: review without having played',       "CALL sp_write_review(5, 4, 1, 5, NULL)", 'Only players who both played in this camp can review each other.');
+CALL t_expect_msg('CHAT: review a player who did not play',   "CALL sp_write_review(1, 4, 12, 5, NULL)", 'Only players who both played in this camp can review each other.');
+CALL t_expect_msg('CHAT: review the same player twice',       "CALL sp_write_review(1, 4, 7, 4, NULL)", 'You already reviewed this player for this camp.');
+CALL t_expect_msg('CHAT: pending reviews with a NULL actor',  "CALL sp_pending_reviews(NULL, 4)", 'Your account cannot do that right now.');
+
+-- behaviour: session chat
+CALL sp_send_session_message(8, 1, '  hello camp  ', @t_c1);
+INSERT INTO tmp_test_results SELECT 'CHAT: session message is trimmed, stored for the actor and returned in the OUT parameter',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_c1 AND sender_id = 8 AND session_id = 1 AND receiver_id IS NULL
+               AND content = 'hello camp' AND is_deleted = 0), 'PASS', 'FAIL'), NULL;
+CALL sp_send_session_message(12, 1, REPEAT('a', 1000), @t_c2);
+INSERT INTO tmp_test_results SELECT 'CHAT: a message of exactly 1000 characters is accepted and ids increase',
+  IF(@t_c2 > @t_c1 AND (SELECT CHAR_LENGTH(content) FROM message WHERE message_id = @t_c2) = 1000, 'PASS', 'FAIL'), NULL;
+CALL sp_send_session_message(1, 3, 'gg', @t_c3);
+INSERT INTO tmp_test_results SELECT 'CHAT: a completed camp stays writable',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_c3 AND session_id = 3 AND sender_id = 1), 'PASS', 'FAIL'), NULL;
+
+-- behaviour: DMs and soft delete
+CALL sp_send_dm(12, 8, 'teammate DM', @t_d1);
+INSERT INTO tmp_test_results SELECT 'CHAT: teammates who are not friends can DM',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_d1 AND sender_id = 12 AND receiver_id = 8 AND session_id IS NULL AND content = 'teammate DM'), 'PASS', 'FAIL'), NULL;
+CALL sp_send_dm(1, 8, 'friend DM', @t_d2);
+INSERT INTO tmp_test_results SELECT 'CHAT: friends can DM',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_d2 AND sender_id = 1 AND receiver_id = 8), 'PASS', 'FAIL'), NULL;
+CALL sp_delete_own_message(8, @t_c1);
+INSERT INTO tmp_test_results SELECT 'CHAT: deleting your own message is a soft delete',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_c1 AND is_deleted = 1 AND content = 'hello camp'), 'PASS', 'FAIL'), NULL;
+CALL t_expect_msg('CHAT: delete a message twice', CONCAT('CALL sp_delete_own_message(8, ', @t_c1, ')'), 'That message is already removed.');
+INSERT INTO tmp_test_results SELECT 'CHAT: deleting your own message writes a message/delete_own audit row without a body',
+  IF((SELECT COUNT(*) FROM audit_log WHERE log_id > @c_a0 AND entity = 'message' AND entity_id = CAST(@t_c1 AS CHAR) AND action = 'delete_own'
+        AND actor_id = 8 AND old_value IS NULL AND new_value IS NULL) = 1, 'PASS', 'FAIL'), NULL;
+-- whitespace, zero-width characters and NBSP count as empty
+CALL t_expect_msg('CHAT: zero-width and NBSP only session message', "CALL sp_send_session_message(8, 1, CONVERT(0xE2808BC2A0E2808CE2808DEFBBBF20 USING utf8mb4), @t_cid)", 'Write a message first.');
+CALL t_expect_msg('CHAT: zero-width and NBSP only DM',              "CALL sp_send_dm(1, 8, CONVERT(0xC2A0EFBBBFE2808B USING utf8mb4), @t_cid)", 'Write a message first.');
+-- a reported or moderated message cannot be removed by its sender
+CALL sp_send_session_message(8, 1, 'reported line', @t_rp);
+INSERT INTO report (reporter_id, reported_user_id, session_id, message_id, category) VALUES (1, 8, 1, @t_rp, 'spam');
+SET @t_rpid = LAST_INSERT_ID();
+CALL t_expect_msg('CHAT: delete a message with an open report', CONCAT('CALL sp_delete_own_message(8, ', @t_rp, ')'), 'This message is part of a report and cannot be removed right now.');
+UPDATE report SET status = 'reviewing' WHERE report_id = @t_rpid;
+CALL t_expect_msg('CHAT: delete a message with a report under review', CONCAT('CALL sp_delete_own_message(8, ', @t_rp, ')'), 'This message is part of a report and cannot be removed right now.');
+UPDATE report SET status = 'dismissed', resolved_at = UTC_TIMESTAMP() WHERE report_id = @t_rpid;
+CALL sp_delete_own_message(8, @t_rp);
+INSERT INTO tmp_test_results SELECT 'CHAT: a message whose report was dismissed can be removed',
+  IF((SELECT is_deleted FROM message WHERE message_id = @t_rp) = 1, 'PASS', 'FAIL'), NULL;
+CALL sp_send_session_message(8, 1, 'moderated line', @t_mp);
+INSERT INTO audit_log (actor_id, entity, entity_id, action) VALUES (9, 'message', @t_mp, 'hide');
+INSERT INTO audit_log (actor_id, entity, entity_id, action) VALUES (9, 'message', @t_mp, 'restore');
+CALL t_expect_msg('CHAT: delete a message a moderator has acted on', CONCAT('CALL sp_delete_own_message(8, ', @t_mp, ')'), 'A moderator has reviewed this message.');
+INSERT INTO tmp_test_results SELECT 'CHAT: the refused delete left the moderated message visible',
+  IF((SELECT is_deleted FROM message WHERE message_id = @t_mp) = 0, 'PASS', 'FAIL'), NULL;
+
+-- banned receiver
+UPDATE users SET status = 'banned' WHERE user_id = 5;
+CALL t_expect_msg('CHAT: DM to a banned player', "CALL sp_send_dm(6, 5, 'hi', @t_cid)", 'You cannot message this player.');
+UPDATE users SET status = @c_st5 WHERE user_id = 5;
+
+-- mute
+INSERT INTO sanction (user_id, sanction_type, reason, issued_by, starts_at, ends_at)
+  VALUES (12, 'mute', 'chat test', 9, UTC_TIMESTAMP() - INTERVAL 1 MINUTE, UTC_TIMESTAMP() + INTERVAL 1 HOUR);
+CALL t_expect_msg('CHAT: muted actor in session chat', "CALL sp_send_session_message(12, 1, 'hi', @t_cid)", 'You are muted%');
+CALL t_expect_msg('CHAT: muted actor in a DM',         "CALL sp_send_dm(12, 8, 'hi', @t_cid)", 'You are muted%');
+DELETE FROM sanction WHERE sanction_id > @c_s0;
+
+-- block refuses in both directions
+INSERT INTO user_block (blocker_id, blocked_id, reason) VALUES (8, 12, 'chat test');
+CALL t_expect_msg('CHAT: DM after the receiver blocked the sender', "CALL sp_send_dm(12, 8, 'hi', @t_cid)", 'You cannot message this player.');
+CALL t_expect_msg('CHAT: DM after the sender blocked the receiver', "CALL sp_send_dm(8, 12, 'hi', @t_cid)", 'You cannot message this player.');
+DELETE FROM user_block WHERE blocker_id = 8 AND blocked_id = 12;
+
+-- rate limit: 20 lines in the window for user 3, then both chat and DM are refused
+INSERT INTO message (sender_id, session_id, content, sent_at)
+  SELECT 3, 7, 'rate probe', UTC_TIMESTAMP() FROM information_schema.COLUMNS LIMIT 20;
+CALL t_expect_msg('CHAT: 21st session message in 30 seconds', "CALL sp_send_session_message(3, 7, 'one more', @t_cid)", 'You are sending messages too fast. Wait a moment.');
+CALL t_expect_msg('CHAT: DM counts toward the same limit',    "CALL sp_send_dm(3, 4, 'one more', @t_cid)", 'You are sending messages too fast. Wait a moment.');
+UPDATE message SET sent_at = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE message_id > @c_m0 AND sender_id = 3 AND content = 'rate probe';
+CALL sp_send_session_message(3, 7, 'after the window', @t_c5);
+INSERT INTO tmp_test_results SELECT 'CHAT: sending works again once the window has passed',
+  IF(EXISTS (SELECT 1 FROM message WHERE message_id = @t_c5 AND sender_id = 3), 'PASS', 'FAIL'), NULL;
+
+-- reviews
+CALL sp_write_review(8, 4, 2, 5, '  great teammate  ');
+CALL sp_write_review(1, 4, 2, 4, '   ');
+CALL t_expect_msg('CHAT: review again after writing it', "CALL sp_write_review(8, 4, 2, 3, NULL)", 'You already reviewed this player for this camp.');
+INSERT INTO tmp_test_results SELECT 'CHAT: review is stored with the trimmed comment, empty comment becomes NULL',
+  IF((SELECT comment_text FROM review WHERE session_id = 4 AND reviewer_id = 8 AND reviewed_id = 2) = 'great teammate'
+     AND (SELECT comment_text FROM review WHERE session_id = 4 AND reviewer_id = 1 AND reviewed_id = 2) IS NULL, 'PASS', 'FAIL'), NULL;
+INSERT INTO tmp_test_results SELECT 'CHAT: sp_write_review refreshes users.avg_rating and review_count through the triggers',
+  IF((SELECT review_count FROM users WHERE user_id = 2) = (SELECT COUNT(*) FROM review WHERE reviewed_id = 2)
+     AND (SELECT review_count FROM users WHERE user_id = 2) = (SELECT review_count FROM c_users WHERE user_id = 2) + 2
+     AND (SELECT avg_rating FROM users WHERE user_id = 2) = (SELECT ROUND(AVG(rating), 2) FROM review WHERE reviewed_id = 2), 'PASS', 'FAIL'), NULL;
+
+START TRANSACTION;                                            -- t_probe's duplicate-key INSERT mixes InnoDB and the MEMORY result table outside one
+CALL t_probe('RBAC: pairadice_player has no SELECT or INSERT on message and no INSERT on review, but can still read review',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_player') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'message') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'message') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'review' AND PRIVILEGE_TYPE = 'INSERT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'review' AND PRIVILEGE_TYPE = 'INSERT') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'review' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_probe('RBAC: pairadice_moderator has SELECT on message but no write privilege on it',
+  "EXISTS (SELECT 1 FROM mysql.user WHERE User = 'pairadice_moderator') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'message' AND PRIVILEGE_TYPE = 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_moderator', GRANTEE) > 0 AND TABLE_NAME = 'message' AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE'))");
+CALL t_probe('RBAC: pairadice_player can EXECUTE the ten chat procedures',
+  "(SELECT COUNT(*) FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name IN ('sp_send_session_message', 'sp_send_dm', 'sp_delete_own_message', 'sp_write_review', 'sp_chat_history', 'sp_dm_thread', 'sp_dm_inbox', 'sp_dm_can_message', 'sp_my_chat_status', 'sp_pending_reviews') AND FIND_IN_SET('Execute', Proc_priv) > 0) = 10");
+ROLLBACK;
+
+-- restore everything the chat tests created or changed
+DELETE FROM review    WHERE session_id = 4 AND reviewed_id = 2 AND reviewer_id IN (1, 8);
+DELETE FROM report    WHERE report_id > @c_r0;
+DELETE FROM message   WHERE message_id > @c_m0;
+DELETE FROM sanction  WHERE sanction_id > @c_s0;
+DELETE FROM user_block WHERE blocker_id = 8 AND blocked_id = 12;
+UPDATE users SET status = @c_st5 WHERE user_id = 5;
+UPDATE users u JOIN c_users c ON c.user_id = u.user_id
+   SET u.avg_rating = c.avg_rating, u.review_count = c.review_count, u.trust_score = c.trust_score;
+DELETE FROM user_badge WHERE (user_id, badge_id) NOT IN (SELECT user_id, badge_id FROM c_badges);
+DELETE FROM embedding_outbox WHERE (entity, entity_id) NOT IN (SELECT entity, entity_id FROM c_outbox);   -- rows the tests queued
+UPDATE embedding_outbox o JOIN c_outbox c ON c.entity = o.entity AND c.entity_id = o.entity_id             -- rows they re-queued
+   SET o.op = c.op, o.enqueued_at = c.enqueued_at, o.attempts = c.attempts, o.last_error = c.last_error;
+DROP TEMPORARY TABLE c_outbox;
+DROP TEMPORARY TABLE c_users;
+DROP TEMPORARY TABLE c_badges;
+DELETE FROM audit_log WHERE log_id > @c_a0;
+INSERT INTO tmp_test_results SELECT 'CLEANUP: chat test data is removed and user 2 stats are restored',
+  IF((SELECT COUNT(*) FROM review) = @c_rv0 AND (SELECT COUNT(*) FROM message WHERE message_id > @c_m0) = 0
+     AND (SELECT status FROM users WHERE user_id = 5) = @c_st5 AND (SELECT review_count FROM users WHERE user_id = 2) = @c_rc2, 'PASS', 'FAIL'), NULL;
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
 DROP PROCEDURE t_probe;

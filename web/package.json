@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "sprites": "bun scripts/build-sprites.ts",
     "dev:kc": "scripts/dev-keychain.sh bun run dev",
-    "check:db": "scripts/dev-keychain.sh bun scripts/check-db-roles.ts"
+    "check:db": "scripts/dev-keychain.sh bun scripts/check-db-roles.ts",
+    "check:chat": "bun scripts/check-chat-reads.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

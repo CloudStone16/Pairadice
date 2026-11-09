@@ -39,7 +39,7 @@ GRANT SELECT ON pairadice.user_tag             TO 'pairadice_player';
 GRANT SELECT ON pairadice.profile_mode         TO 'pairadice_player';
 GRANT SELECT ON pairadice.profile_role         TO 'pairadice_player';
 GRANT SELECT ON pairadice.availability         TO 'pairadice_player';
-GRANT SELECT ON pairadice.message              TO 'pairadice_player';
+-- (no direct SELECT on message: sp_chat_history, sp_dm_thread and sp_dm_inbox replaced it, so a player reads only their own conversations)
 GRANT SELECT ON pairadice.friendship           TO 'pairadice_player';
 GRANT SELECT ON pairadice.user_block           TO 'pairadice_player';
 GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at, trust_score, avg_rating)
@@ -49,11 +49,20 @@ GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at,
 -- sp_send_friend_request, sp_block_user ... check who is acting, so a forged statement cannot skip a rule).
 -- The same holds for profile tables (users, user_language, user_tag, platform_account, player_game_profile,
 -- profile_mode, profile_role, availability): only the sp_*profile* / sp_set_* procedures of 11_profiles.sql write them.
--- What remains direct: chat and reviews (Phase 5 is not built yet; the triggers in 02_routines.sql enforce the
--- rules). Reports go through sp_report_user.
-GRANT INSERT ON pairadice.message TO 'pairadice_player';
-GRANT INSERT ON pairadice.review  TO 'pairadice_player';
+-- Chat, DMs and reviews are procedures too (13_chat.sql). Reports go through sp_report_user.
+-- (no direct INSERT on message: sp_send_session_message and sp_send_dm replaced it, so a forged sender_id is impossible)
+-- (no direct INSERT on review: sp_write_review replaced it; reading reviews stays direct)
 GRANT SELECT ON pairadice.review  TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_send_session_message TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_send_dm TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_delete_own_message TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_write_review TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_chat_history TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_dm_thread TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_dm_inbox TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_dm_can_message TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_my_chat_status TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_pending_reviews TO 'pairadice_player';
 -- (no direct INSERT on report: sp_report_user replaced it, so a forged statement cannot file a report as someone else)
 GRANT EXECUTE ON PROCEDURE pairadice.sp_report_user TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_my_reports TO 'pairadice_player';
@@ -94,6 +103,7 @@ GRANT 'pairadice_player' TO 'pairadice_moderator';
 GRANT SELECT         ON pairadice.report    TO 'pairadice_moderator';
 GRANT SELECT         ON pairadice.sanction  TO 'pairadice_moderator';
 GRANT SELECT         ON pairadice.audit_log TO 'pairadice_moderator';
+GRANT SELECT         ON pairadice.message   TO 'pairadice_moderator';   -- evidence for reports; no longer inherited from player
 GRANT SELECT         ON pairadice.users     TO 'pairadice_moderator';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_expire_sanctions TO 'pairadice_moderator';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_claim_report TO 'pairadice_moderator';

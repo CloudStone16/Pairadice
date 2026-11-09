@@ -97,6 +97,31 @@ const checks: Check[] = [
     sql: "CALL sp_grant_role(0, 0, 'player')",
     deniedErrnos: [1370],
   },
+  // Phase 5: chat goes through procedures (13_chat.sql); the player has no direct SELECT or INSERT on message
+  {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "SELECT FROM message",
+    sql: "SELECT 1 FROM message WHERE 1 = 0",
+    deniedErrnos: [1142],
+  },
+  {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "INSERT INTO message",
+    sql: "INSERT INTO message (sender_id, receiver_id, content) SELECT 1, 2, 'probe' FROM DUAL WHERE 1 = 0",
+    deniedErrnos: [1142],
+  },
+  {
+    login: "player",
+    userVar: "PD_DB_USER_PLAYER",
+    pwdVar: "PD_DB_PWD_PLAYER",
+    label: "INSERT INTO review",
+    sql: "INSERT INTO review (session_id, reviewer_id, reviewed_id, rating) SELECT 1, 1, 2, 5 FROM DUAL WHERE 1 = 0",
+    deniedErrnos: [1142],
+  },
   {
     login: "admin",
     userVar: "PD_DB_USER_ADMIN",
@@ -108,8 +133,10 @@ const checks: Check[] = [
 ];
 
 /** A second probe per login that must SUCCEED (the login is not simply broken). */
-const allowed: Record<string, { label: string; sql: string; okErrnos?: number[] }> = {
-  admin: { label: "SELECT FROM audit_log", sql: "SELECT COUNT(*) AS n FROM audit_log" },
+const allowed: Record<string, { label: string; sql: string; okErrnos?: number[] }[]> = {
+  admin: [{ label: "SELECT FROM audit_log", sql: "SELECT COUNT(*) AS n FROM audit_log" }],
+  // moderation screens read message evidence directly (explicit grant, no longer inherited from player)
+  moderator: [{ label: "SELECT COUNT(*) FROM message", sql: "SELECT COUNT(*) AS n FROM message" }],
 };
 
 /**
@@ -117,7 +144,10 @@ const allowed: Record<string, { label: string; sql: string; okErrnos?: number[] 
  * SQLSTATE 45000 (errno 1644); that proves EXECUTE is granted and nothing is written.
  */
 const mayExecute: Record<string, { label: string; sql: string; okErrnos: number[] }[]> = {
-  player: [{ label: "CALL sp_report_user (runs, refused by the rules)", sql: "CALL sp_report_user(0, 0, 'spam', NULL, NULL, NULL, @pd_probe)", okErrnos: [1644] }],
+  player: [
+    { label: "CALL sp_report_user (runs, refused by the rules)", sql: "CALL sp_report_user(0, 0, 'spam', NULL, NULL, NULL, @pd_probe)", okErrnos: [1644] },
+    { label: "CALL sp_chat_history (runs, refused by the rules)", sql: "CALL sp_chat_history(0, 0, NULL, 1)", okErrnos: [1644] },
+  ],
   moderator: [{ label: "CALL sp_claim_report (runs, refused by the rules)", sql: "CALL sp_claim_report(0, 0)", okErrnos: [1644] }],
 };
 
@@ -191,8 +221,7 @@ async function runLogin(c: Check): Promise<boolean> {
     const [rows] = await conn.query<RowDataPacket[]>("SELECT CURRENT_USER() AS u, CURRENT_ROLE() AS r");
     console.log(`${c.login} -> CURRENT_USER=${String(rows[0]?.u)} CURRENT_ROLE=${String(rows[0]?.r)}`);
     let ok = await expectDenied(conn, c);
-    const extra = allowed[c.login];
-    if (extra) ok = (await expectAllowed(conn, extra)) && ok;
+    for (const probe of allowed[c.login] ?? []) ok = (await expectAllowed(conn, probe)) && ok;
     for (const probe of mayExecute[c.login] ?? []) ok = (await expectAllowed(conn, probe)) && ok;
     return ok;
   } catch (err) {
