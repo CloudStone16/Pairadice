@@ -19,6 +19,9 @@ ASSUME_YES=0
 START_SERVER=0
 APP_USER=""
 WEB_USER=""
+MOD_USER=""
+ADMIN_USER=""
+AUTH_USER=""
 
 usage() {
   cat <<EOF
@@ -36,11 +39,19 @@ What to load:
       --no-seed         schema + routines only, no sample data
       --no-rbac         skip the MySQL roles (needs CREATE ROLE privilege)
       --no-vector       skip the MongoDB sync triggers (07_vector_outbox.sql)
-      --tests           run the constraint tests afterwards (34 must-fail statements)
+      --tests           run the constraint tests afterwards (must-fail checks + outbox trigger behaviour checks)
       --samples         print the sample queries afterwards
       --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
       --web-user NAME   also create a READ-ONLY login NAME@localhost with the pairadice_web_ro role
-                        (for the web app; prompts for a password; needs RBAC)
+                        (for the web app)
+      --mod-user NAME   also create a login NAME@localhost with the pairadice_moderator role
+      --admin-user NAME also create a login NAME@localhost with the pairadice_admin role (ALL on $DB_NAME)
+      --auth-user NAME  also create a login NAME@localhost with the pairadice_auth role
+                        (sign-up / login / session check only)
+  Login options need RBAC and all names must differ. Each password is read from an environment variable
+  if set (PD_APP_PWD, PD_WEB_PWD, PD_MOD_PWD, PD_ADMIN_PWD, PD_AUTH_PWD), otherwise prompted for twice
+  (input hidden). An existing login gets its password reset and its role re-granted, so re-runs are safe.
+  04_rbac.sql drops and recreates the roles, so pass every login you want to keep on every run.
 
 Other:
       --start-server    try to start a local MySQL server if it is not running
@@ -52,6 +63,7 @@ Examples:
   ./database/setup.sh --tests --samples
   ./database/setup.sh -u admin -h db.local -P 3307 --no-seed
   ./database/setup.sh -y --tests --web-user pd_web
+  PD_AUTH_PWD=... ./database/setup.sh -y --auth-user pd_auth --app-user pd_api
 
 Every mysql call runs with --default-character-set=utf8mb4 and time_zone='+00:00': all
 DATETIME columns are UTC and the .sql files are UTF-8. Connect your own clients the same way.
@@ -81,6 +93,9 @@ while [[ $# -gt 0 ]]; do
     --samples)       RUN_SAMPLES=1; shift ;;
     --app-user)      APP_USER="${2:?missing value for $1}"; shift 2 ;;
     --web-user)      WEB_USER="${2:?missing value for $1}"; shift 2 ;;
+    --mod-user)      MOD_USER="${2:?missing value for $1}"; shift 2 ;;
+    --admin-user)    ADMIN_USER="${2:?missing value for $1}"; shift 2 ;;
+    --auth-user)     AUTH_USER="${2:?missing value for $1}"; shift 2 ;;
     --start-server)  START_SERVER=1; shift ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
     --help)          usage; exit 0 ;;
@@ -88,12 +103,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$APP_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$APP_USER" ]] \
-  || die "--app-user must be 1-32 letters, digits or underscores"
-[[ "$WEB_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$WEB_USER" ]] \
-  || die "--web-user must be 1-32 letters, digits or underscores"
-[[ -z "$APP_USER" || "$APP_USER" != "$WEB_USER" ]] \
-  || die "--app-user and --web-user must be different logins."
+check_login_name() {   # check_login_name OPTION VALUE
+  [[ -z "$2" || "$2" =~ ^[A-Za-z0-9_]{1,32}$ ]] || die "$1 must be 1-32 letters, digits or underscores"
+}
+check_login_name --app-user   "$APP_USER"
+check_login_name --web-user   "$WEB_USER"
+check_login_name --mod-user   "$MOD_USER"
+check_login_name --admin-user "$ADMIN_USER"
+check_login_name --auth-user  "$AUTH_USER"
+login_names=("$APP_USER" "$WEB_USER" "$MOD_USER" "$ADMIN_USER" "$AUTH_USER")
+for i in 0 1 2 3 4; do
+  for j in 1 2 3 4; do
+    (( j > i )) || continue
+    [[ -z "${login_names[$i]}" || "${login_names[$i]}" != "${login_names[$j]}" ]] \
+      || die "--app-user, --web-user, --mod-user, --admin-user and --auth-user must all be different logins."
+  done
+done
 
 # ---------------------------------------------------------------- prerequisites
 command -v mysql >/dev/null 2>&1 \
@@ -176,46 +201,47 @@ if [[ "$SEED" -eq 1 ]]; then
   [[ "$sofia_hex" == "536F66C3AD61" ]] \
     || die "text was loaded double-encoded (users.sofia_bw HEX is '${sofia_hex:-<none>}', expected 536F66C3AD61). The mysql client's character set is not utf8mb4; check [client]/[mysql] default-character-set in your my.cnf, then re-run."
 fi
+# 07 runs before 04 so the v_outbox_dead view exists when 04 grants it to the vector worker
+if [[ "$VECTOR" -eq 1 ]]; then
+  load 07_vector_outbox.sql "Creating MongoDB sync triggers (07_vector_outbox.sql)"
+fi
 if [[ "$RBAC" -eq 1 ]]; then
   step "Creating MySQL roles (04_rbac.sql)"
   run_mysql < "$SCRIPT_DIR/04_rbac.sql" >/dev/null \
     || die "04_rbac.sql failed. The user needs CREATE ROLE and GRANT privileges; re-run with --no-rbac to skip."
 fi
-if [[ "$VECTOR" -eq 1 ]]; then
-  load 07_vector_outbox.sql "Creating MongoDB sync triggers (07_vector_outbox.sql)"
-fi
 
-# ---------------------------------------------------------------- optional app login
-if [[ -n "$APP_USER" ]]; then
-  [[ "$RBAC" -eq 1 ]] || die "--app-user needs the roles from 04_rbac.sql (remove --no-rbac)."
-  read -r -s -p "Password for new MySQL login '${APP_USER}'@'localhost': " app_pw; echo
-  read -r -s -p "Repeat password: " app_pw2; echo
-  [[ -n "$app_pw" && "$app_pw" == "$app_pw2" ]] || die "passwords are empty or do not match."
-  app_pw_sql="${app_pw//\\/\\\\}"; app_pw_sql="${app_pw_sql//\'/\'\'}"
-  step "Creating login '${APP_USER}'@'localhost' with role pairadice_player"
+# ---------------------------------------------------------------- optional logins
+# create_login OPTION NAME ROLE PASSWORD_ENV_VAR
+# The password comes from the named environment variable if set, else a hidden double prompt. It is escaped for a
+# SQL string literal and sent to mysql on stdin only (never on a command line, never printed).
+create_login() {
+  local opt="$1" name="$2" role="$3" envvar="$4" pw pw2 pw_sql
+  [[ -n "$name" ]] || return 0
+  [[ "$RBAC" -eq 1 ]] || die "$opt needs the roles from 04_rbac.sql (remove --no-rbac)."
+  if [[ -n "${!envvar:-}" ]]; then
+    pw="${!envvar}"
+  else
+    read -r -s -p "Password for MySQL login '${name}'@'localhost': " pw; echo
+    read -r -s -p "Repeat password: " pw2; echo
+    [[ -n "$pw" && "$pw" == "$pw2" ]] || die "passwords are empty or do not match."
+  fi
+  local sq="'"
+  pw_sql="${pw//\\/\\\\}"; pw_sql="${pw_sql//$sq/$sq$sq}"   # double backslashes and quotes (a quoted \' would not match)
+  step "Creating login '${name}'@'localhost' with role ${role}"
   run_mysql <<SQL >/dev/null
-CREATE USER IF NOT EXISTS '${APP_USER}'@'localhost' IDENTIFIED BY '${app_pw_sql}';
-GRANT 'pairadice_player' TO '${APP_USER}'@'localhost';
-SET DEFAULT ROLE 'pairadice_player' TO '${APP_USER}'@'localhost';
+CREATE USER IF NOT EXISTS '${name}'@'localhost' IDENTIFIED BY '${pw_sql}';
+ALTER USER '${name}'@'localhost' IDENTIFIED BY '${pw_sql}';
+GRANT '${role}' TO '${name}'@'localhost';
+SET DEFAULT ROLE '${role}' TO '${name}'@'localhost';
 SQL
-  unset app_pw app_pw2 app_pw_sql
-fi
-
-# ---------------------------------------------------------------- optional read-only web login
-if [[ -n "$WEB_USER" ]]; then
-  [[ "$RBAC" -eq 1 ]] || die "--web-user needs the roles from 04_rbac.sql (remove --no-rbac)."
-  read -r -s -p "Password for new MySQL login '${WEB_USER}'@'localhost': " web_pw; echo
-  read -r -s -p "Repeat password: " web_pw2; echo
-  [[ -n "$web_pw" && "$web_pw" == "$web_pw2" ]] || die "passwords are empty or do not match."
-  web_pw_sql="${web_pw//\\/\\\\}"; web_pw_sql="${web_pw_sql//\'/\'\'}"
-  step "Creating read-only login '${WEB_USER}'@'localhost' with role pairadice_web_ro"
-  run_mysql <<SQL >/dev/null
-CREATE USER IF NOT EXISTS '${WEB_USER}'@'localhost' IDENTIFIED BY '${web_pw_sql}';
-GRANT 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
-SET DEFAULT ROLE 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
-SQL
-  unset web_pw web_pw2 web_pw_sql
-fi
+  pw=""; pw2=""; pw_sql=""
+}
+create_login --app-user   "$APP_USER"   pairadice_player    PD_APP_PWD
+create_login --web-user   "$WEB_USER"   pairadice_web_ro     PD_WEB_PWD
+create_login --mod-user   "$MOD_USER"   pairadice_moderator  PD_MOD_PWD
+create_login --admin-user "$ADMIN_USER" pairadice_admin      PD_ADMIN_PWD
+create_login --auth-user  "$AUTH_USER"  pairadice_auth       PD_AUTH_PWD
 
 # ---------------------------------------------------------------- tests
 if [[ "$RUN_TESTS" -eq 1 ]]; then

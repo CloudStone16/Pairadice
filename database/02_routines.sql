@@ -577,6 +577,19 @@ BEGIN                                                        -- never copies pas
           JSON_OBJECT('provider', NEW.provider, 'email_verified', NEW.email_verified));
 END$$
 
+-- Sign-up path only: gives a brand-new user the 'player' role. The auth login has no INSERT on user_role.
+CREATE PROCEDURE sp_register_player(IN p_user_id BIGINT UNSIGNED)
+SQL SECURITY DEFINER
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = p_user_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Unknown user.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM user_role WHERE user_id = p_user_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User already has a role.';
+  END IF;
+  INSERT INTO user_role (user_id, role_id) SELECT p_user_id, role_id FROM role WHERE role_name = 'player';
+END$$
+
 DELIMITER ;
 
 -- ============================================================ views

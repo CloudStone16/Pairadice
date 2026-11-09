@@ -2,7 +2,11 @@
 const env = process.env;
 
 export const config = {
+  // MONGO_URI is per process: the app/search process uses the pdApi (read-only) URI, the worker and
+  // backfill use the pdWorker (read/write) URI. The URIs carry credentials and come from the environment only.
   mongoUri: env.MONGO_URI ?? 'mongodb://localhost:27018/?directConnection=true',
+  // root URI, used by scripts/init-db.js only (creates roles and users)
+  mongoRootUri: env.MONGO_ROOT_URI,
   mongoDb: env.MONGO_DB ?? 'pairadice_vec',
   mysql: {
     host: env.MYSQL_HOST ?? '127.0.0.1',
@@ -16,6 +20,7 @@ export const config = {
   model: { name: 'Xenova/all-MiniLM-L6-v2', dims: 384 },
   // phase B blend: final = vectorWeight * similarity + (1 - vectorWeight) * SQL rule score
   vectorWeight: Number(env.VECTOR_WEIGHT ?? 0.6),
+  // outbox rows failing this many times are parked as failed (sync.js exports its own MAX_ATTEMPTS; reconciled later)
 };
 
 export const COLLECTIONS = { players: 'player_embeddings', sessions: 'session_embeddings' };

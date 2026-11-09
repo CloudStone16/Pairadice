@@ -32,6 +32,14 @@ DROP TRIGGER IF EXISTS trg_session_language_ad_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_ai_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_au_vec;
 DROP TRIGGER IF EXISTS trg_session_slot_ad_vec;
+DROP TRIGGER IF EXISTS trg_profile_role_au_vec;
+DROP TRIGGER IF EXISTS trg_platform_account_ad_vec;
+DROP TRIGGER IF EXISTS trg_platform_account_au_vec;
+DROP TRIGGER IF EXISTS trg_game_au_vec;
+DROP TRIGGER IF EXISTS trg_game_mode_au_vec;
+DROP TRIGGER IF EXISTS trg_game_role_au_vec;
+DROP TRIGGER IF EXISTS trg_tag_au_vec;
+DROP VIEW IF EXISTS v_outbox_dead;
 
 DELIMITER $$
 
@@ -93,6 +101,22 @@ CREATE TRIGGER trg_profile_role_ai_vec AFTER INSERT ON profile_role FOR EACH ROW
   CALL sp_vec_enqueue_profile(NEW.profile_id)$$
 CREATE TRIGGER trg_profile_role_ad_vec AFTER DELETE ON profile_role FOR EACH ROW
   CALL sp_vec_enqueue_profile(OLD.profile_id)$$
+CREATE TRIGGER trg_profile_role_au_vec AFTER UPDATE ON profile_role FOR EACH ROW
+BEGIN                                                        -- e.g. preference_order changed; a profile_id move queues both owners
+  CALL sp_vec_enqueue_profile(NEW.profile_id);
+  IF NOT (OLD.profile_id <=> NEW.profile_id) THEN CALL sp_vec_enqueue_profile(OLD.profile_id); END IF;
+END$$
+
+-- platform_account rows deleted by the users cascade fire no triggers (users are never deleted anyway)
+CREATE TRIGGER trg_platform_account_ad_vec AFTER DELETE ON platform_account FOR EACH ROW
+  CALL sp_vec_enqueue('player', OLD.user_id, 'upsert')$$
+CREATE TRIGGER trg_platform_account_au_vec AFTER UPDATE ON platform_account FOR EACH ROW
+BEGIN                                                        -- only a platform or owner change alters the embedded text
+  IF NOT (OLD.platform_id <=> NEW.platform_id AND OLD.user_id <=> NEW.user_id) THEN
+    CALL sp_vec_enqueue('player', NEW.user_id, 'upsert');
+    IF NOT (OLD.user_id <=> NEW.user_id) THEN CALL sp_vec_enqueue('player', OLD.user_id, 'upsert'); END IF;
+  END IF;
+END$$
 
 -- ============================================================ session embedding sources
 CREATE TRIGGER trg_session_ai_vec AFTER INSERT ON lfg_session FOR EACH ROW
@@ -126,4 +150,79 @@ CREATE TRIGGER trg_session_slot_au_vec AFTER UPDATE ON session_slot FOR EACH ROW
 CREATE TRIGGER trg_session_slot_ad_vec AFTER DELETE ON session_slot FOR EACH ROW
   CALL sp_vec_enqueue('session', OLD.session_id, 'upsert')$$
 
+-- ============================================================ catalogue renames
+-- A renamed game / mode / role / tag changes the embedded text of every player and session that mentions it.
+-- Same upsert semantics as sp_vec_enqueue (newer change overwrites op / enqueued_at, resets attempts / last_error),
+-- done set-based. Banned players and completed / cancelled sessions are skipped (the worker re-checks anyway).
+CREATE TRIGGER trg_game_au_vec AFTER UPDATE ON game FOR EACH ROW
+BEGIN
+  IF NOT (OLD.name <=> NEW.name) THEN
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'player', p.user_id, 'upsert'
+        FROM player_game_profile p JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+       WHERE p.game_id = NEW.game_id
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT 'session', s.session_id, 'upsert'
+        FROM lfg_session s WHERE s.game_id = NEW.game_id AND s.status NOT IN ('completed','cancelled')
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_game_mode_au_vec AFTER UPDATE ON game_mode FOR EACH ROW
+BEGIN
+  IF NOT (OLD.name <=> NEW.name) THEN
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'player', p.user_id, 'upsert'
+        FROM profile_mode pm JOIN player_game_profile p ON p.profile_id = pm.profile_id
+        JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+       WHERE pm.mode_id = NEW.mode_id
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT 'session', s.session_id, 'upsert'
+        FROM lfg_session s WHERE s.mode_id = NEW.mode_id AND s.status NOT IN ('completed','cancelled')
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_game_role_au_vec AFTER UPDATE ON game_role FOR EACH ROW
+BEGIN
+  IF NOT (OLD.name <=> NEW.name) THEN
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'player', p.user_id, 'upsert'
+        FROM profile_role pr JOIN player_game_profile p ON p.profile_id = pr.profile_id
+        JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+       WHERE pr.game_role_id = NEW.game_role_id
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'session', s.session_id, 'upsert'
+        FROM session_slot ss JOIN lfg_session s ON s.session_id = ss.session_id
+       WHERE ss.game_role_id = NEW.game_role_id AND s.status NOT IN ('completed','cancelled')
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+  END IF;
+END$$
+
+CREATE TRIGGER trg_tag_au_vec AFTER UPDATE ON tag FOR EACH ROW
+BEGIN
+  IF NOT (OLD.name <=> NEW.name) THEN
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'player', ut.user_id, 'upsert'
+        FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned'
+       WHERE ut.tag_id = NEW.tag_id
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+    INSERT INTO embedding_outbox (entity, entity_id, op)
+      SELECT DISTINCT 'session', st.session_id, 'upsert'
+        FROM session_tag st JOIN lfg_session s ON s.session_id = st.session_id
+       WHERE st.tag_id = NEW.tag_id AND s.status NOT IN ('completed','cancelled')
+    ON DUPLICATE KEY UPDATE op = 'upsert', enqueued_at = CURRENT_TIMESTAMP(6), attempts = 0, last_error = NULL;
+  END IF;
+END$$
+
 DELIMITER ;
+
+-- ============================================================ dead letters
+-- Rows the worker has given up on. The threshold 5 MUST match MAX_ATTEMPTS in vector/src/sync.js.
+CREATE VIEW v_outbox_dead AS
+SELECT entity, entity_id, op, enqueued_at, attempts, last_error
+  FROM embedding_outbox
+ WHERE attempts >= 5;

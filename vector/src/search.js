@@ -63,6 +63,15 @@ export async function similarSessions(userId, { gameId, k = 5 } = {}) {
   return nearest('sessions', await playerVector(userId), { filter, k });
 }
 
+/** Min-max normalise a Map(id -> raw similarity) to 0..1; <= 1 entry or all equal gives 0.5 for all. */
+export function normaliseScores(map) {
+  const vals = [...map.values()];
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const flat = vals.length <= 1 || max === min;
+  return new Map([...map].map(([id, v]) => [id, flat ? 0.5 : (v - min) / (max - min)]));
+}
+
 /**
  * Phase B: SQL decides eligibility and the rule score (sp_recommend_sessions), MongoDB reranks the
  * eligible sessions by interest similarity. final = w * vector + (1 - w) * rule. Optionally logged
@@ -74,16 +83,19 @@ export async function hybridSessions(userId, { k = 5, candidates = 50, log = fal
   const rule = resultSets[0];
   if (rule.length === 0) return [];
   const ids = rule.map((r) => Number(r.session_id));
-  const sims = new Map((await nearest('sessions', await playerVector(userId),
+  const raw = new Map((await nearest('sessions', await playerVector(userId),
     { filter: { _id: { $in: ids } }, k: ids.length })).map((d) => [d._id, d.score]));
+  const sims = normaliseScores(raw);
 
   const w = config.vectorWeight;
   const ranked = rule.map((r) => {
-    const vector = sims.get(Number(r.session_id)) ?? 0.5;          // not embedded yet: neutral
+    const id = Number(r.session_id);
+    const vector = sims.get(id) ?? 0.5;                            // not embedded yet: neutral (normalised scale)
     const ruleScore = Number(r.score);
     return {
-      session_id: Number(r.session_id), title: r.title, game: r.game,
-      rule: ruleScore, vector: Number(vector.toFixed(4)),
+      session_id: id, title: r.title, game: r.game,
+      rule: ruleScore, vector_raw: raw.has(id) ? Number(raw.get(id).toFixed(4)) : null,
+      vector: Number(vector.toFixed(4)),
       score: Number((w * vector + (1 - w) * ruleScore).toFixed(4)),
     };
   }).sort((a, b) => b.score - a.score).slice(0, k);
@@ -92,7 +104,7 @@ export async function hybridSessions(userId, { k = 5, candidates = 50, log = fal
     await db.query(
       'INSERT INTO match_recommendation (user_id, session_id, score, score_breakdown, source) VALUES ?',
       [ranked.map((r) => [userId, r.session_id, r.score,
-        JSON.stringify({ rule: r.rule, vector: r.vector, vector_weight: w }), 'hybrid'])]);
+        JSON.stringify({ rule: r.rule, vector_raw: r.vector_raw, vector: r.vector, vector_weight: w, normalised: true }), 'hybrid'])]);
   }
   return ranked;
 }

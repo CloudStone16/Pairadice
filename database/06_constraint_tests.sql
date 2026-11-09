@@ -1,6 +1,6 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';   -- all DATETIME columns are UTC
--- PairADice constraint tests: every statement below MUST be rejected.
+-- PairADice constraint tests: every statement in the first section MUST be rejected; the last section checks outbox trigger behaviour.
 -- Runs inside a transaction that is rolled back, so the data is unchanged afterwards.
 -- Usage: mysql --default-character-set=utf8mb4 -u root -p < 06_constraint_tests.sql
 USE pairadice;
@@ -67,6 +67,79 @@ CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT')");
 CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
+-- ---- grants added in Phase 0.1 (same probe pattern: rejected = PASS). Each ends with an EXISTS so a missing role cannot pass vacuously.
+CALL t_expect_error('RBAC: pairadice_player cannot UPDATE users derived or identity columns',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'users' AND PRIVILEGE_TYPE = 'UPDATE' AND COLUMN_NAME NOT IN ('display_name', 'avatar_url', 'bio', 'timezone', 'region_strictness', 'country_code', 'home_region_id', 'last_active_at')) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'users' AND PRIVILEGE_TYPE IN ('UPDATE', 'INSERT', 'DELETE')) AND EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'users' AND COLUMN_NAME = 'display_name' AND PRIVILEGE_TYPE = 'UPDATE')");
+CALL t_expect_error('RBAC: pairadice_player has no access to auth, sanction, audit or outbox tables',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'sanction', 'audit_log', 'embedding_outbox', 'role', 'permission', 'role_permission', 'user_role')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'sanction', 'audit_log', 'embedding_outbox', 'user_role')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'platform_account')");
+CALL t_expect_error('RBAC: pairadice_player cannot DELETE messages, reviews, sessions or participants',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE' AND TABLE_NAME IN ('message', 'review', 'lfg_session', 'session_participant', 'report', 'team', 'users')) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE' AND TABLE_NAME = 'profile_role')");
+CALL t_expect_error('RBAC: pairadice_auth has no access to sanction, report, audit_log, message or gameplay tables',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME NOT IN ('auth_account', 'auth_token', 'users', 'user_role', 'role', 'role_permission', 'permission')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME NOT IN ('auth_account', 'auth_token', 'users')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'auth_token')");
+CALL t_expect_error('RBAC: pairadice_auth has no DELETE anywhere',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'auth_account' AND PRIVILEGE_TYPE = 'INSERT')");
+CALL t_expect_error('RBAC: pairadice_auth writes only sign-up / login columns (not status, trust_score, token_hash...)',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'users' AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE') AND COLUMN_NAME NOT IN ('username', 'display_name', 'avatar_url', 'timezone', 'country_code', 'last_active_at')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'auth_token' AND PRIVILEGE_TYPE = 'UPDATE' AND COLUMN_NAME <> 'revoked_at') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'auth_account' AND PRIVILEGE_TYPE = 'UPDATE' AND COLUMN_NAME <> 'email_verified') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME IN ('users', 'auth_account') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE')) AND EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'users' AND COLUMN_NAME = 'username' AND PRIVILEGE_TYPE = 'INSERT')");
+CALL t_expect_error('RBAC: pairadice_vec_worker writes only embedding_outbox and can read v_outbox_dead',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_vec_worker', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT' AND TABLE_NAME <> 'embedding_outbox') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_vec_worker', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_vec_worker', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_vec_worker', GRANTEE) > 0 AND TABLE_NAME = 'v_outbox_dead' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_expect_error('RBAC: pairadice_auth has no INSERT on user_role but can EXECUTE sp_register_player',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'user_role' AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'user_role') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_auth', GRANTEE) > 0 AND TABLE_NAME = 'user_role' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM mysql.procs_priv WHERE Routine_name = 'sp_register_player' AND Db = 'pairadice' AND User = 'pairadice_auth' AND FIND_IN_SET('Execute', Proc_priv) > 0)");
+CALL t_expect_error('RBAC: pairadice_web_ro has no privilege on message, friendship or user_block',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME = 'lfg_session' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_expect_error('RBAC: pairadice_admin has no CREATE / ALTER / DROP / TRIGGER at schema level',
+  "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE IN ('CREATE', 'ALTER', 'DROP', 'TRIGGER', 'INDEX', 'REFERENCES', 'CREATE ROUTINE', 'ALTER ROUTINE', 'CREATE VIEW')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND IS_GRANTABLE = 'YES') AND EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE')");
+
+-- sp_accept_participant (PROC tests above) commits its own transaction, which ends the outer one;
+-- open a fresh transaction so the writes below are really rolled back.
+START TRANSACTION;
+-- ---- sp_register_player (does not commit, so it is rolled back with the rest)
+CALL t_expect_error('PROC: sp_register_player rejects a user who already has a role', "CALL sp_register_player(1)");
+CALL t_expect_error('PROC: sp_register_player rejects an unknown user', "CALL sp_register_player(999999999)");
+-- ---- behaviour checks for the vector outbox triggers (07_vector_outbox.sql): each statement is performed, then
+-- embedding_outbox is inspected and PASS / FAIL recorded (the outbox is emptied first; everything is rolled back).
+DELETE FROM embedding_outbox;
+SELECT profile_id, game_role_id INTO @pid, @rid FROM profile_role ORDER BY profile_id, game_role_id LIMIT 1;
+SELECT user_id INTO @puid FROM player_game_profile WHERE profile_id = @pid;
+UPDATE profile_role SET preference_order = preference_order + 1 WHERE profile_id = @pid AND game_role_id = @rid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: profile_role UPDATE enqueues the owner',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = @puid AND op = 'upsert'), 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+SELECT account_id, user_id INTO @aid, @auid FROM platform_account ORDER BY account_id LIMIT 1;
+UPDATE platform_account SET is_public = NOT is_public WHERE account_id = @aid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: platform_account is_public change enqueues nothing',
+  IF(NOT EXISTS (SELECT 1 FROM embedding_outbox), 'PASS', 'FAIL'), NULL;
+DELETE FROM platform_account WHERE account_id = @aid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: platform_account DELETE enqueues the owner',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player' AND entity_id = @auid AND op = 'upsert'), 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+SELECT ut.tag_id INTO @tid FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned' ORDER BY ut.tag_id LIMIT 1;
+UPDATE tag SET category = CONCAT(IFNULL(category, ''), 'x') WHERE tag_id = @tid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: tag category change (no rename) enqueues nothing',
+  IF(NOT EXISTS (SELECT 1 FROM embedding_outbox), 'PASS', 'FAIL'), NULL;
+UPDATE tag SET name = CONCAT(name, ' (renamed)') WHERE tag_id = @tid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: tag rename enqueues every player and session using it',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player')
+     AND NOT EXISTS (SELECT 1 FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned'
+                      WHERE ut.tag_id = @tid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = ut.user_id))
+     AND NOT EXISTS (SELECT 1 FROM session_tag st JOIN lfg_session s ON s.session_id = st.session_id AND s.status NOT IN ('completed', 'cancelled')
+                      WHERE st.tag_id = @tid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'session' AND o.entity_id = st.session_id)), 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+SELECT game_id INTO @gid FROM lfg_session WHERE status NOT IN ('completed', 'cancelled') ORDER BY session_id LIMIT 1;
+UPDATE game SET name = CONCAT(name, ' (renamed)') WHERE game_id = @gid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: game rename enqueues its live sessions and profile owners',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'session')
+     AND NOT EXISTS (SELECT 1 FROM lfg_session s WHERE s.game_id = @gid AND s.status NOT IN ('completed', 'cancelled')
+                      AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'session' AND o.entity_id = s.session_id))
+     AND NOT EXISTS (SELECT 1 FROM player_game_profile p JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+                      WHERE p.game_id = @gid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = p.user_id)), 'PASS', 'FAIL'), NULL;
+
+DELETE FROM embedding_outbox;
+INSERT INTO embedding_outbox (entity, entity_id, op, attempts) VALUES ('player', 4000000001, 'upsert', 5), ('player', 4000000002, 'upsert', 4);
+INSERT INTO tmp_test_results SELECT 'OUTBOX: v_outbox_dead lists attempts >= 5 only',
+  IF((SELECT COUNT(*) FROM v_outbox_dead) = 1 AND EXISTS (SELECT 1 FROM v_outbox_dead WHERE entity_id = 4000000001), 'PASS', 'FAIL'), NULL;
 ROLLBACK;
 
 SELECT * FROM tmp_test_results;

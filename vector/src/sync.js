@@ -62,20 +62,41 @@ export async function syncEntities(entity, ids) {
   return stats;
 }
 
-/** Full rebuild: sync every eligible row and remove documents MySQL no longer has. */
+/**
+ * Full rebuild: sync every eligible row and remove documents MySQL no longer has. Outbox rows for the
+ * synced entities are then cleared, unless enqueued after the backfill started (a concurrent edit).
+ */
 export async function backfill() {
+  const db = sql();
   const result = {};
+  const [[{ t0 }]] = await db.query("SELECT DATE_FORMAT(UTC_TIMESTAMP(6), '%Y-%m-%d %H:%i:%s.%f') AS t0");
   for (const entity of ['player', 'session']) {
     const ids = [...(await LOADERS[entity]()).keys()];
     const stats = await syncEntities(entity, ids);
     const coll = (await collections())[COLL[entity]];
     stats.deleted += (await coll.deleteMany({ _id: { $nin: ids } })).deletedCount;
+    const [del] = await db.query(
+      'DELETE FROM embedding_outbox WHERE entity = ? AND enqueued_at <= ?', [entity, t0]);
+    stats.cleared = del.affectedRows;
     result[entity] = stats;
   }
   return result;
 }
 
-const MAX_ATTEMPTS = 5;
+export const MAX_ATTEMPTS = 5;
+
+/** Outbox rows that ran out of attempts and are no longer picked up by the worker. */
+export async function countDead() {
+  const [[{ n }]] = await sql().query('SELECT COUNT(*) AS n FROM embedding_outbox WHERE attempts >= ?', [MAX_ATTEMPTS]);
+  return Number(n);
+}
+
+/** Give dead rows a fresh set of attempts; returns how many were reset. */
+export async function retryDead() {
+  const [res] = await sql().query(
+    'UPDATE embedding_outbox SET attempts = 0, last_error = NULL WHERE attempts >= ?', [MAX_ATTEMPTS]);
+  return res.affectedRows;
+}
 
 /**
  * Process up to `limit` outbox rows (oldest first). A row is removed only if its enqueued_at is

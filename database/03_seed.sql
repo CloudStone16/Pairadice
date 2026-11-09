@@ -6,6 +6,8 @@ SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- No real secrets: password hashes are fake argon2id-format placeholders,
 -- token hashes are random bytes (RANDOM_BYTES) -- no raw token exists anywhere.
 USE pairadice;
+-- Fixed dates below were written for 2026-10-28; shift them so the demo stays "current" on any load day.
+SET @seed_shift_days = 7 * CEIL(GREATEST(0, DATEDIFF(UTC_DATE(), '2026-10-28')) / 7);   -- whole weeks keep weekdays (availability matching)
 
 -- ============================================================ language & region
 INSERT INTO language (language_code, name, native_name) VALUES
@@ -225,16 +227,16 @@ INSERT INTO friendship (requester_id, addressee_id, status) VALUES
 INSERT INTO lfg_session (session_id, host_id, game_id, mode_id, platform_id, team_id, region_id, min_rank_id, max_rank_id,
                          title, description, max_players, scheduled_start, region_locked, voice_required,
                          visibility, join_policy, min_avg_rating, require_verified_discord) VALUES
- (1,1,2,5,6,NULL,9,8,10,'Comp grind Gold-Diamond, need a controller','Mumbai servers, mic on, no tilt.',5,'2026-10-30 14:30:00',TRUE,TRUE,'public','approval',NULL,FALSE),
- (2,4,1,1,1,2,12,NULL,NULL,'Bedwars 4s - chill EU evening','Java, Hypixel. Beginners welcome.',4,'2026-10-31 16:00:00',FALSE,FALSE,'public','auto',NULL,FALSE),
- (3,2,2,6,6,1,9,NULL,NULL,'Unrated warm-up','Quick warm-up before comp.',5,'2026-10-24 15:00:00',FALSE,TRUE,'public','approval',NULL,FALSE),
- (4,7,3,10,7,NULL,13,16,NULL,'Zero Build ranked push','Gold+ only, IGL on comms.',4,'2026-10-25 01:00:00',FALSE,TRUE,'public','approval',NULL,FALSE),
- (5,7,3,9,7,NULL,13,NULL,NULL,'Saturday squads','Just vibes.',4,'2026-11-01 02:00:00',FALSE,FALSE,'public','approval',NULL,FALSE),
- (6,6,1,4,3,NULL,11,NULL,NULL,'Bedrock survival world','Crossplay Xbox/PS/Switch.',6,'2026-10-25 11:00:00',FALSE,FALSE,'public','approval',NULL,FALSE),
- (7,3,1,3,1,NULL,10,NULL,NULL,'Duels practice JP/EU','First to 10.',2,'2026-10-28 09:00:00',FALSE,FALSE,'public','approval',NULL,FALSE),
- (8,8,2,7,6,NULL,9,NULL,NULL,'Spike Rush with friends','Friends only.',5,'2026-10-29 15:00:00',FALSE,FALSE,'friends','approval',NULL,FALSE),
- (9,11,2,6,6,NULL,13,NULL,NULL,'Late night unrated NA','',5,'2026-10-31 03:00:00',FALSE,FALSE,'public','auto',NULL,FALSE),
- (10,2,2,6,6,NULL,9,NULL,NULL,'Chill unrated, all ranks welcome','Practice comms.',5,'2026-10-31 10:30:00',FALSE,FALSE,'public','approval',3.50,FALSE);
+ (1,1,2,5,6,NULL,9,8,10,'Comp grind Gold-Diamond, need a controller','Mumbai servers, mic on, no tilt.',5,('2026-10-30 14:30:00' + INTERVAL @seed_shift_days DAY),TRUE,TRUE,'public','approval',NULL,FALSE),
+ (2,4,1,1,1,2,12,NULL,NULL,'Bedwars 4s - chill EU evening','Java, Hypixel. Beginners welcome.',4,('2026-10-31 16:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','auto',NULL,FALSE),
+ (3,2,2,6,6,1,9,NULL,NULL,'Unrated warm-up','Quick warm-up before comp.',5,('2026-10-24 15:00:00' + INTERVAL @seed_shift_days DAY),FALSE,TRUE,'public','approval',NULL,FALSE),
+ (4,7,3,10,7,NULL,13,16,NULL,'Zero Build ranked push','Gold+ only, IGL on comms.',4,('2026-10-25 01:00:00' + INTERVAL @seed_shift_days DAY),FALSE,TRUE,'public','approval',NULL,FALSE),
+ (5,7,3,9,7,NULL,13,NULL,NULL,'Saturday squads','Just vibes.',4,('2026-11-01 02:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','approval',NULL,FALSE),
+ (6,6,1,4,3,NULL,11,NULL,NULL,'Bedrock survival world','Crossplay Xbox/PS/Switch.',6,('2026-10-25 11:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','approval',NULL,FALSE),
+ (7,3,1,3,1,NULL,10,NULL,NULL,'Duels practice JP/EU','First to 10.',2,('2026-10-28 09:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','approval',NULL,FALSE),
+ (8,8,2,7,6,NULL,9,NULL,NULL,'Spike Rush with friends','Friends only.',5,('2026-10-29 15:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'friends','approval',NULL,FALSE),
+ (9,11,2,6,6,NULL,13,NULL,NULL,'Late night unrated NA','',5,('2026-10-31 03:00:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','auto',NULL,FALSE),
+ (10,2,2,6,6,NULL,9,NULL,NULL,'Chill unrated, all ranks welcome','Practice comms.',5,('2026-10-31 10:30:00' + INTERVAL @seed_shift_days DAY),FALSE,FALSE,'public','approval',3.50,FALSE);
 
 INSERT INTO session_language (session_id, language_code) VALUES
  (1,'en'),(1,'hi'),(2,'en'),(2,'de'),(3,'en'),(3,'hi'),(4,'en'),(5,'en'),(6,'en'),(7,'en'),(7,'ja'),
