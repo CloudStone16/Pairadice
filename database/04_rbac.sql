@@ -21,17 +21,32 @@ GRANT SELECT ON pairadice.badge          TO 'pairadice_player';
 GRANT SELECT ON pairadice.v_open_sessions  TO 'pairadice_player';
 GRANT SELECT ON pairadice.v_player_card    TO 'pairadice_player';
 GRANT SELECT ON pairadice.v_session_roster TO 'pairadice_player';
--- write the things a player does (triggers still enforce the business rules)
-GRANT SELECT, INSERT, UPDATE ON pairadice.lfg_session         TO 'pairadice_player';
-GRANT SELECT, INSERT, UPDATE ON pairadice.session_participant TO 'pairadice_player';
-GRANT SELECT, INSERT ON pairadice.session_language TO 'pairadice_player';
-GRANT SELECT, INSERT ON pairadice.session_tag      TO 'pairadice_player';
-GRANT SELECT, INSERT ON pairadice.session_slot     TO 'pairadice_player';
-GRANT SELECT, INSERT ON pairadice.message          TO 'pairadice_player';
-GRANT SELECT, INSERT ON pairadice.review           TO 'pairadice_player';
-GRANT INSERT         ON pairadice.report           TO 'pairadice_player';
-GRANT SELECT, INSERT, DELETE ON pairadice.user_block TO 'pairadice_player';
-GRANT SELECT, INSERT, UPDATE ON pairadice.friendship TO 'pairadice_player';
+-- Signed-in reads run as this login, so it reads what the pages need: sessions and their slots / languages / tags,
+-- participants, chat, friendships and blocks (the queries filter them to the signed-in viewer), profile data and
+-- the safe column subset of users (no email, bio, country, home region, strictness or counters).
+GRANT SELECT ON pairadice.lfg_session          TO 'pairadice_player';
+GRANT SELECT ON pairadice.session_participant  TO 'pairadice_player';
+GRANT SELECT ON pairadice.session_slot         TO 'pairadice_player';
+GRANT SELECT ON pairadice.session_language     TO 'pairadice_player';
+GRANT SELECT ON pairadice.session_tag          TO 'pairadice_player';
+GRANT SELECT ON pairadice.game_platform        TO 'pairadice_player';
+GRANT SELECT ON pairadice.player_game_profile  TO 'pairadice_player';
+GRANT SELECT ON pairadice.user_badge           TO 'pairadice_player';
+GRANT SELECT ON pairadice.user_language        TO 'pairadice_player';
+GRANT SELECT ON pairadice.message              TO 'pairadice_player';
+GRANT SELECT ON pairadice.friendship           TO 'pairadice_player';
+GRANT SELECT ON pairadice.user_block           TO 'pairadice_player';
+GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at, trust_score, avg_rating)
+  ON pairadice.users TO 'pairadice_player';
+-- Writes go through DEFINER procedures; the shared login cannot bypass them. Sessions, participants, friendships
+-- and blocks have NO direct INSERT / UPDATE / DELETE here (sp_create_session, sp_request_join, sp_accept_participant,
+-- sp_send_friend_request, sp_block_user ... check who is acting, so a forged statement cannot skip a rule).
+-- What remains direct: chat and reviews (Phase 5 is not built yet; the triggers in 02_routines.sql enforce the
+-- rules) and reports.
+GRANT INSERT ON pairadice.message TO 'pairadice_player';
+GRANT INSERT ON pairadice.review  TO 'pairadice_player';
+GRANT SELECT ON pairadice.review  TO 'pairadice_player';
+GRANT INSERT ON pairadice.report  TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_players  TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_accept_participant TO 'pairadice_player';
@@ -49,7 +64,7 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_remove_friend TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_block_user TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_unblock_user TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_friend_overview TO 'pairadice_player';
--- hybrid (SQL + vector) recommendations are logged by the API, and outcomes updated as the player acts
+-- hybrid (SQL + vector) recommendations are logged by the API (web/src/lib/recommend.ts), and outcomes updated as the player acts
 GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pairadice_player';
 
 -- ---------------------------------------------------------------- moderator = player + moderation
@@ -61,8 +76,10 @@ GRANT SELECT         ON pairadice.users     TO 'pairadice_moderator';
 GRANT UPDATE (is_deleted) ON pairadice.message TO 'pairadice_moderator';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_expire_sanctions TO 'pairadice_moderator';
 
--- ---------------------------------------------------------------- admin = everything in this schema
-GRANT ALL PRIVILEGES ON pairadice.* TO 'pairadice_admin';
+-- ---------------------------------------------------------------- admin = all data and routines in this schema, no DDL
+-- No CREATE / ALTER / DROP / TRIGGER / INDEX / GRANT OPTION: schema changes belong to the root / migration login
+-- (setup.sh, 01_schema.sql ...), never to a login the web app holds.
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON pairadice.* TO 'pairadice_admin';
 
 -- ---------------------------------------------------------------- vector worker = read embedding sources, drain the outbox
 -- Used by vector/scripts/worker.js and backfill.js. No auth tables: the worker never sees secrets.
@@ -84,12 +101,13 @@ GRANT SELECT ON pairadice.game_role           TO 'pairadice_vec_worker';
 GRANT SELECT ON pairadice.platform            TO 'pairadice_vec_worker';
 GRANT SELECT, UPDATE, DELETE ON pairadice.embedding_outbox TO 'pairadice_vec_worker';
 
--- ---------------------------------------------------------------- web read-only (Phase 1 web app)
--- The Next.js app must NOT connect as root. This role can only read public data and call the
--- recommendation procedure; there is no INSERT/UPDATE/DELETE anywhere and no access at all to
--- auth_account, auth_token, platform_account, sanction, report, audit_log, embedding_outbox or
--- match_recommendation. users is limited to non-sensitive columns (no bio, country, home region,
--- strictness, counters, email...).
+-- ---------------------------------------------------------------- web read-only (anonymous visitors)
+-- Anonymous reads only: the Next.js app must NOT connect as root, and signed-in reads use the player / moderator /
+-- admin logins. This role can only read public data. There is no INSERT/UPDATE/DELETE anywhere, no EXECUTE on any
+-- routine (sp_recommend_sessions with p_log = TRUE would let a "read-only" login write match_recommendation as
+-- DEFINER, so anonymous visitors get no recommendations), and no access at all to message, friendship, user_block,
+-- auth_account, auth_token, platform_account, sanction, report, audit_log, embedding_outbox or match_recommendation.
+-- users is limited to non-sensitive columns (no bio, country, home region, strictness, counters, email...).
 GRANT SELECT (user_id, username, display_name, status, timezone, last_active_at, trust_score, avg_rating)
   ON pairadice.users TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.game                TO 'pairadice_web_ro';
@@ -105,22 +123,15 @@ GRANT SELECT ON pairadice.lfg_session         TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_slot        TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_language    TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.session_tag         TO 'pairadice_web_ro';
-GRANT SELECT ON pairadice.friendship          TO 'pairadice_web_ro';
-GRANT SELECT ON pairadice.message             TO 'pairadice_web_ro';
-GRANT SELECT ON pairadice.user_block          TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.player_game_profile TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.user_badge          TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.badge               TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.user_language       TO 'pairadice_web_ro';
--- Views and sp_recommend_sessions are DEFINER objects (SQL SECURITY DEFINER is the default and 02_routines.sql
--- does not override it), so they run with the loader's privileges: the narrow column grant on users does not
--- break the views, and the procedure's temporary table (tmp_session_rec) needs no privilege from this role.
--- Consequence: the procedure could write match_recommendation as DEFINER if called with p_log = TRUE,
--- so the web app MUST call it with p_log = FALSE: CALL sp_recommend_sessions(?, ?, FALSE).
+-- Views are DEFINER objects (SQL SECURITY DEFINER is the default and 02_routines.sql does not override it), so
+-- they run with the loader's privileges and the narrow column grant on users does not break them.
 GRANT SELECT ON pairadice.v_open_sessions  TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.v_session_roster TO 'pairadice_web_ro';
 GRANT SELECT ON pairadice.v_player_card    TO 'pairadice_web_ro';
-GRANT EXECUTE ON PROCEDURE pairadice.sp_recommend_sessions TO 'pairadice_web_ro';
 
 -- ---------------------------------------------------------------- auth (sign-up / sign-in / sign-out)
 -- The only role that touches login secrets. Sign-up goes through sp_register_user (08_auth.sql), so this
@@ -138,6 +149,6 @@ GRANT SELECT ON pairadice.role      TO 'pairadice_auth';
 --   CREATE USER 'pd_api'@'localhost' IDENTIFIED BY '<password>';
 --   GRANT 'pairadice_player' TO 'pd_api'@'localhost';
 --   SET DEFAULT ROLE 'pairadice_player' TO 'pd_api'@'localhost';
--- or, for the read-only web app:  ./database/setup.sh --web-user pd_web
+-- or let setup.sh do it for every role: --web-user, --auth-user, --app-user (player), --mod-user, --admin-user
 -- To inspect a role (needs SELECT on the mysql schema):
 --   SHOW GRANTS FOR 'pairadice_moderator' USING 'pairadice_player';

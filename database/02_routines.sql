@@ -24,6 +24,12 @@ BEGIN                                                        -- either direction
                  WHERE (blocker_id = p_a AND blocked_id = p_b) OR (blocker_id = p_b AND blocked_id = p_a));
 END$$
 
+CREATE FUNCTION fn_user_active(p_user_id BIGINT UNSIGNED)
+RETURNS BOOLEAN READS SQL DATA
+BEGIN                                                        -- NULL or unknown ids are not active
+  RETURN p_user_id IS NOT NULL AND EXISTS (SELECT 1 FROM users WHERE user_id = p_user_id AND status = 'active');
+END$$
+
 CREATE FUNCTION fn_are_friends(p_a BIGINT UNSIGNED, p_b BIGINT UNSIGNED)
 RETURNS BOOLEAN READS SQL DATA
 BEGIN
@@ -121,6 +127,9 @@ BEGIN                                                        -- host approves a 
   DECLARE v_pstatus VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
+  IF NOT fn_user_active(p_actor_id) THEN                     -- also rejects a NULL actor (NULL <> x would skip the check below)
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
   START TRANSACTION;
   SELECT host_id, status, current_players, max_players
     INTO v_host, v_status, v_cur, v_max
@@ -130,6 +139,9 @@ BEGIN                                                        -- host approves a 
   END IF;
   IF v_host <> p_actor_id AND NOT fn_has_permission(p_actor_id, 'report.review') THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only the host (or a moderator) can accept players';
+  END IF;
+  IF p_user_id IS NULL OR fn_is_blocked(v_host, p_user_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot accept this player';
   END IF;
   IF v_status <> 'open' OR v_cur >= v_max THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Session is full or not open';

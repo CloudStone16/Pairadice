@@ -8,9 +8,9 @@ SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 USE pairadice;
 
 -- Session times are written relative to the day this seed was authored (2026-10-29) and shifted
--- by whole days so that day becomes the load day: the board always shows upcoming quests, recent
--- ones look recent, and finished ones stay in the past. Reload before a demo to refresh them.
-SET @seed_shift_days = GREATEST(0, DATEDIFF(UTC_DATE(), '2026-10-29'));
+-- by whole weeks (so weekdays and availability matching are preserved): the board always shows upcoming
+-- quests, recent ones look recent, and finished ones stay in the past. Reload before a demo to refresh them.
+SET @seed_shift_days = 7 * CEIL(GREATEST(0, DATEDIFF(UTC_DATE(), '2026-10-29')) / 7);   -- whole weeks keep weekdays (availability matching)
 
 -- ============================================================ language & region
 INSERT INTO language (language_code, name, native_name) VALUES

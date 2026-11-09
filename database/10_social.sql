@@ -2,6 +2,8 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';   -- all DATETIME columns are UTC
 -- PairADice friends and blocks. Run after 01_schema.sql, 02_routines.sql and 09_sessions.sql, before 04_rbac.sql
 -- (which grants EXECUTE on these procedures to pairadice_player; moderator and admin inherit it).
+-- Sending, answering and blocking need an active account (fn_user_active: NULL, suspended and banned are
+-- rejected); cancelling, removing and unblocking stay open so nobody is stuck in a relationship.
 -- Each write is one procedure with one transaction, and the database itself decides who may act: p_actor_id
 -- is the only identity used, so the web tier cannot act for someone else by passing the wrong id. The player
 -- login has no DELETE on friendship, so cancelling a request or removing a friend can only go through here.
@@ -28,7 +30,10 @@ BEGIN                                                        -- new request, or 
   DECLARE v_tstatus   VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-  IF p_actor_id IS NULL OR p_target_id IS NULL OR p_actor_id = p_target_id THEN
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
+  IF p_target_id IS NULL OR p_actor_id = p_target_id THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot befriend yourself';
   END IF;
   SELECT status INTO v_tstatus FROM users WHERE user_id = p_target_id;
@@ -76,7 +81,10 @@ BEGIN
   DECLARE v_found INT DEFAULT 0;
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-  IF p_actor_id IS NULL OR p_requester_id IS NULL OR p_accept IS NULL THEN
+  IF NOT fn_user_active(p_actor_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
+  IF p_requester_id IS NULL OR p_accept IS NULL THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Missing details';
   END IF;
   START TRANSACTION;
@@ -121,7 +129,10 @@ CREATE PROCEDURE sp_block_user(IN p_actor_id BIGINT UNSIGNED, IN p_target_id BIG
 BEGIN                                                        -- trg_block_ai removes the friendship in the same transaction
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-  IF p_actor_id IS NULL OR p_target_id IS NULL OR p_actor_id = p_target_id THEN
+  IF NOT fn_user_active(p_actor_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
+  IF p_target_id IS NULL OR p_actor_id = p_target_id THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You cannot block yourself';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = p_target_id) THEN

@@ -1,11 +1,14 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';   -- all DATETIME columns are UTC
--- PairADice constraint tests: every statement below MUST be rejected.
+-- PairADice constraint tests: every statement below MUST be rejected (or, for the OUTBOX / probe rows, a
+-- condition must hold). Where the expected error text is known it is asserted, not just "some error".
 -- Runs inside a transaction that is rolled back, so the data is unchanged afterwards.
 -- Usage: mysql --default-character-set=utf8mb4 -u root -p < 06_constraint_tests.sql
 USE pairadice;
 
 DROP PROCEDURE IF EXISTS t_expect_error;
+DROP PROCEDURE IF EXISTS t_expect_msg;
+DROP PROCEDURE IF EXISTS t_probe;
 DELIMITER $$
 CREATE PROCEDURE t_expect_error(IN p_name VARCHAR(120), IN p_sql TEXT)
 BEGIN
@@ -17,6 +20,30 @@ BEGIN
   EXECUTE t_stmt;
   DEALLOCATE PREPARE t_stmt;
   INSERT INTO tmp_test_results VALUES (p_name, IF(v_err IS NULL, 'FAIL (accepted!)', 'PASS'), v_err);
+END$$
+
+-- Like t_expect_error, but the statement must fail with a message matching p_like (so a typo or a missing
+-- privilege cannot pass as "some error").
+CREATE PROCEDURE t_expect_msg(IN p_name VARCHAR(120), IN p_sql TEXT, IN p_like VARCHAR(200))
+BEGIN
+  DECLARE v_err VARCHAR(500) DEFAULT NULL;
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    BEGIN GET DIAGNOSTICS CONDITION 1 v_err = MESSAGE_TEXT; END;
+  SET @t_sql = p_sql;
+  PREPARE t_stmt FROM @t_sql;
+  EXECUTE t_stmt;
+  DEALLOCATE PREPARE t_stmt;
+  INSERT INTO tmp_test_results VALUES (p_name,
+    IF(v_err IS NULL, 'FAIL (accepted!)', IF(v_err LIKE p_like, 'PASS', 'FAIL (wrong error)')), v_err);
+END$$
+
+-- Probe: PASS only when p_cond is true. The INSERT collides with language 'en' (duplicate PK) exactly then, and
+-- inserts nothing otherwise; any other error (e.g. no access to mysql.procs_priv) is a FAIL, not a pass.
+CREATE PROCEDURE t_probe(IN p_name VARCHAR(120), IN p_cond TEXT)
+BEGIN
+  CALL t_expect_msg(p_name,
+    CONCAT("INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE ", p_cond),
+    '%Duplicate entry%');
 END$$
 DELIMITER ;
 
@@ -78,6 +105,51 @@ CALL t_expect_error('RBAC: pairadice_web_ro has no privilege other than SELECT',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE <> 'SELECT')");
 CALL t_expect_error('RBAC: pairadice_web_ro cannot touch auth / moderation / outbox tables',
   "INSERT INTO language (language_code, name, native_name) SELECT 'en', 'probe', 'probe' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0) AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('auth_account', 'auth_token', 'platform_account', 'sanction', 'report', 'audit_log', 'embedding_outbox', 'match_recommendation')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME <> 'users')");
+-- grant probes (information_schema; every one ends with an EXISTS so a missing role cannot pass vacuously)
+CALL t_probe('RBAC: pairadice_web_ro has no privilege on message, friendship or user_block, and sees lfg_session',
+  "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME IN ('message', 'friendship', 'user_block')) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND TABLE_NAME = 'lfg_session' AND PRIVILEGE_TYPE = 'SELECT')");
+CALL t_probe('RBAC: pairadice_web_ro has no EXECUTE on any routine (sp_recommend_sessions p_log would write as DEFINER)',
+  "NOT EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_web_ro') AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_web_ro', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'EXECUTE') AND EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name = 'sp_recommend_sessions' AND FIND_IN_SET('Execute', Proc_priv) > 0)");
+CALL t_probe('RBAC: pairadice_admin has no CREATE / ALTER / DROP / TRIGGER / INDEX and no GRANT OPTION, but has DML',
+  "NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE IN ('CREATE', 'ALTER', 'DROP', 'TRIGGER', 'INDEX', 'REFERENCES', 'CREATE ROUTINE', 'ALTER ROUTINE', 'CREATE VIEW', 'CREATE TEMPORARY TABLES', 'LOCK TABLES', 'EVENT')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND IS_GRANTABLE = 'YES') AND NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND (IS_GRANTABLE = 'YES' OR PRIVILEGE_TYPE IN ('CREATE', 'ALTER', 'DROP', 'TRIGGER'))) AND EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'DELETE') AND EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_admin', GRANTEE) > 0 AND PRIVILEGE_TYPE = 'EXECUTE')");
+CALL t_probe('RBAC: pairadice_player has no direct write on sessions, participants, friendships or blocks, but reads them',
+  "NOT EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('lfg_session', 'session_participant', 'friendship', 'user_block', 'session_slot', 'session_language', 'session_tag') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE', 'DELETE')) AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMN_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME IN ('lfg_session', 'session_participant', 'friendship', 'user_block', 'session_slot', 'session_language', 'session_tag') AND PRIVILEGE_TYPE IN ('INSERT', 'UPDATE')) AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0) AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'lfg_session' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE LOCATE('pairadice_player', GRANTEE) > 0 AND TABLE_NAME = 'friendship' AND PRIVILEGE_TYPE = 'SELECT') AND EXISTS (SELECT 1 FROM mysql.procs_priv WHERE User = 'pairadice_player' AND Routine_name = 'sp_request_join' AND FIND_IN_SET('Execute', Proc_priv) > 0)");
+-- catalogue renames re-embed everything that mentions the renamed row (07_vector_outbox.sql)
+DELETE FROM embedding_outbox;
+SELECT ut.tag_id INTO @tid FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned' ORDER BY ut.tag_id LIMIT 1;
+UPDATE tag SET category = CONCAT(IFNULL(category, ''), 'x') WHERE tag_id = @tid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: tag category change (no rename) enqueues nothing',
+  IF(NOT EXISTS (SELECT 1 FROM embedding_outbox), 'PASS', 'FAIL'), NULL;
+UPDATE tag SET name = CONCAT(name, ' (renamed)') WHERE tag_id = @tid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: tag rename enqueues every player and session using it',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player')
+     AND NOT EXISTS (SELECT 1 FROM user_tag ut JOIN users u ON u.user_id = ut.user_id AND u.status <> 'banned'
+                      WHERE ut.tag_id = @tid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = ut.user_id))
+     AND NOT EXISTS (SELECT 1 FROM session_tag st JOIN lfg_session s ON s.session_id = st.session_id AND s.status NOT IN ('completed', 'cancelled')
+                      WHERE st.tag_id = @tid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'session' AND o.entity_id = st.session_id)), 'PASS', 'FAIL'), NULL;
+DELETE FROM embedding_outbox;
+SELECT game_id INTO @gid FROM lfg_session WHERE status NOT IN ('completed', 'cancelled') ORDER BY session_id LIMIT 1;
+UPDATE game SET name = CONCAT(name, ' (renamed)') WHERE game_id = @gid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: game rename enqueues its live sessions and profile owners',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'session')
+     AND NOT EXISTS (SELECT 1 FROM lfg_session s WHERE s.game_id = @gid AND s.status NOT IN ('completed', 'cancelled')
+                      AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'session' AND o.entity_id = s.session_id))
+     AND NOT EXISTS (SELECT 1 FROM player_game_profile p JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+                      WHERE p.game_id = @gid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = p.user_id)), 'PASS', 'FAIL'), NULL;
+DELETE FROM embedding_outbox;
+SELECT pm.mode_id INTO @mid FROM profile_mode pm ORDER BY pm.mode_id LIMIT 1;
+UPDATE game_mode SET name = CONCAT(name, ' (renamed)') WHERE mode_id = @mid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: game_mode rename enqueues the players and sessions using it',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player')
+     AND NOT EXISTS (SELECT 1 FROM profile_mode pm JOIN player_game_profile p ON p.profile_id = pm.profile_id JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+                      WHERE pm.mode_id = @mid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = p.user_id)), 'PASS', 'FAIL'), NULL;
+DELETE FROM embedding_outbox;
+SELECT pr.game_role_id INTO @rid FROM profile_role pr ORDER BY pr.game_role_id LIMIT 1;
+UPDATE game_role SET name = CONCAT(name, ' (renamed)') WHERE game_role_id = @rid;
+INSERT INTO tmp_test_results SELECT 'OUTBOX: game_role rename enqueues the players using it',
+  IF(EXISTS (SELECT 1 FROM embedding_outbox WHERE entity = 'player')
+     AND NOT EXISTS (SELECT 1 FROM profile_role pr JOIN player_game_profile p ON p.profile_id = pr.profile_id JOIN users u ON u.user_id = p.user_id AND u.status <> 'banned'
+                      WHERE pr.game_role_id = @rid AND NOT EXISTS (SELECT 1 FROM embedding_outbox o WHERE o.entity = 'player' AND o.entity_id = p.user_id)), 'PASS', 'FAIL'), NULL;
 -- recommendation feedback: accepting a recommended player marks their recommendation 'joined'
 INSERT INTO match_recommendation (user_id, session_id, score, source) VALUES (2, 1, 0.5000, 'sql');
 UPDATE session_participant SET status = 'accepted' WHERE session_id = 1 AND user_id = 2;
@@ -99,9 +171,15 @@ CALL t_expect_error('PROC: sign-up with a bad email',     "CALL sp_register_user
 CALL t_expect_error('PROC: host requests to join own session', "CALL sp_request_join(1, 1, 4, 1)");
 CALL t_expect_error('PROC: join a cancelled session',          "CALL sp_request_join(1, 6, NULL, NULL)");
 CALL t_expect_error('PROC: join a completed session',          "CALL sp_request_join(12, 3, NULL, NULL)");
+-- The invite-only probe has to change data, and START TRANSACTION inside sp_request_join commits whatever
+-- is open, so a ROLLBACK cannot undo it: the original value is saved and restored explicitly, and the
+-- restore is itself tested below. (The toggle re-queues session 10 in the outbox, which is harmless.)
+SELECT visibility INTO @t_vis FROM lfg_session WHERE session_id = 10;
 UPDATE lfg_session SET visibility = 'invite' WHERE session_id = 10;
-CALL t_expect_error('PROC: join an invite-only session',       "CALL sp_request_join(1, 10, NULL, NULL)");
-UPDATE lfg_session SET visibility = 'public' WHERE session_id = 10;
+CALL t_expect_msg('PROC: join an invite-only session',         "CALL sp_request_join(1, 10, NULL, NULL)", '%invite-only%');
+UPDATE lfg_session SET visibility = @t_vis WHERE session_id = 10;
+INSERT INTO tmp_test_results SELECT 'CLEANUP: session 10 visibility is restored',
+  IF((SELECT visibility FROM lfg_session WHERE session_id = 10) <=> @t_vis AND @t_vis = 'public', 'PASS', 'FAIL'), NULL;
 CALL t_expect_error('PROC: join friends-only as a non-friend', "CALL sp_request_join(4, 8, NULL, NULL)");
 CALL t_expect_error('PROC: join with another user''s account', "CALL sp_request_join(12, 10, NULL, 4)");
 CALL t_expect_error('PROC: join with a wrong-platform account', "CALL sp_request_join(1, 10, NULL, 2)");
@@ -125,6 +203,18 @@ CALL t_expect_error('SOCIAL: remove someone who is not a friend', "CALL sp_remov
 CALL t_expect_error('SOCIAL: block yourself',                    "CALL sp_block_user(1, 1)");
 CALL t_expect_error('SOCIAL: unblock someone not blocked',       "CALL sp_unblock_user(1, 3)");
 
+-- NULL and suspended actors (each is refused before anything is written)
+CALL t_expect_msg('PROC: sp_accept_participant with a NULL actor', "CALL sp_accept_participant(1, 2, NULL)", '%account cannot do that%');
+CALL t_expect_msg('PROC: sp_accept_participant by a suspended actor', "CALL sp_accept_participant(9, 11, 11)", '%account cannot do that%');
+CALL t_expect_msg('PROC: sp_request_join by a suspended actor',   "CALL sp_request_join(11, 10, NULL, NULL)", '%account cannot do that%');
+CALL t_expect_msg('PROC: sp_request_join with a NULL actor',      "CALL sp_request_join(NULL, 10, NULL, NULL)", '%account cannot do that%');
+CALL t_expect_msg('PROC: sp_set_session_status with a NULL status', "CALL sp_set_session_status(1, 1, NULL)", '%not allowed%');
+CALL t_expect_msg('SOCIAL: sp_send_friend_request by a suspended actor', "CALL sp_send_friend_request(11, 3)", '%account cannot do that%');
+CALL t_expect_msg('SOCIAL: sp_block_user with a NULL actor',      "CALL sp_block_user(NULL, 3)", '%account cannot do that%');
+INSERT INTO tmp_test_results SELECT 'PROC: failed procedures leave @audit_actor NULL', IF(@audit_actor IS NULL, 'PASS', 'FAIL'), NULL;
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
+DROP PROCEDURE t_probe;
+DROP PROCEDURE t_expect_msg;
 DROP PROCEDURE t_expect_error;

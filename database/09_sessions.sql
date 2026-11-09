@@ -50,9 +50,12 @@ BEGIN                                                        -- session + host r
   DECLARE v_title VARCHAR(120) DEFAULT TRIM(p_title);
   DECLARE v_acct_user BIGINT UNSIGNED;
   DECLARE v_acct_plat SMALLINT UNSIGNED;
-  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN SET @audit_actor = NULL; ROLLBACK; RESIGNAL; END;
 
-  IF p_actor_id IS NULL OR NOT fn_has_permission(p_actor_id, 'session.create') THEN
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
+  IF NOT fn_has_permission(p_actor_id, 'session.create') THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You are not allowed to host sessions';
   END IF;
   IF v_title IS NULL OR CHAR_LENGTH(v_title) < 3 OR CHAR_LENGTH(v_title) > 120 THEN
@@ -126,7 +129,10 @@ BEGIN                                                        -- ask to join (or 
   DECLARE v_new     VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-  IF p_actor_id IS NULL OR NOT fn_has_permission(p_actor_id, 'session.join') THEN
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
+  IF NOT fn_has_permission(p_actor_id, 'session.join') THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You are not allowed to join sessions';
   END IF;
 
@@ -198,6 +204,9 @@ BEGIN                                                        -- pending request 
   DECLARE v_pstatus VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
+  IF p_actor_id IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;                                                    -- leaving stays open to suspended users on purpose
   START TRANSACTION;
   SELECT host_id INTO v_host FROM lfg_session WHERE session_id = p_session_id FOR UPDATE;
   IF v_host IS NULL THEN
@@ -227,6 +236,9 @@ BEGIN                                                        -- host (or moderat
   DECLARE v_pstatus VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
   START TRANSACTION;
   SELECT host_id INTO v_host FROM lfg_session WHERE session_id = p_session_id FOR UPDATE;
   IF v_host IS NULL THEN
@@ -253,6 +265,9 @@ BEGIN                                                        -- host (or moderat
   DECLARE v_pstatus VARCHAR(16);
   DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
   START TRANSACTION;
   SELECT host_id INTO v_host FROM lfg_session WHERE session_id = p_session_id FOR UPDATE;
   IF v_host IS NULL THEN
@@ -280,8 +295,11 @@ CREATE PROCEDURE sp_set_session_status(IN p_actor_id   BIGINT UNSIGNED,
 BEGIN                                                        -- start, cancel or complete; open <-> full is trigger-managed
   DECLARE v_host   BIGINT UNSIGNED;
   DECLARE v_status VARCHAR(16);
-  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN SET @audit_actor = NULL; ROLLBACK; RESIGNAL; END;
 
+  IF NOT fn_user_active(p_actor_id) THEN                     -- NULL, unknown, suspended or banned
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Your account cannot do that right now.';
+  END IF;
   START TRANSACTION;
   SELECT host_id, status INTO v_host, v_status
     FROM lfg_session WHERE session_id = p_session_id FOR UPDATE;
@@ -291,7 +309,7 @@ BEGIN                                                        -- start, cancel or
   IF p_actor_id IS NULL OR (v_host <> p_actor_id AND NOT fn_has_permission(p_actor_id, 'report.review')) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only the host (or a moderator) can change the session status';
   END IF;
-  IF NOT ((p_status = 'in_progress' AND v_status IN ('open','full'))
+  IF p_status IS NULL OR NOT ((p_status = 'in_progress' AND v_status IN ('open','full'))
        OR (p_status = 'cancelled'   AND v_status IN ('open','full','in_progress'))
        OR (p_status = 'completed'   AND v_status = 'in_progress')) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'That status change is not allowed';

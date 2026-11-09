@@ -20,6 +20,9 @@ ASSUME_YES=0
 START_SERVER=0
 APP_USER=""
 WEB_USER=""
+AUTH_USER=""
+MOD_USER=""
+ADMIN_USER=""
 SOCKET_LOGINS_FOR=""
 
 usage() {
@@ -40,11 +43,16 @@ What to load:
       --no-seed         schema + routines only, no sample data
       --no-rbac         skip the MySQL roles (needs CREATE ROLE privilege)
       --no-vector       skip the MongoDB sync triggers (07_vector_outbox.sql)
-      --tests           run the constraint tests afterwards (66 must-fail statements)
+      --tests           run the constraint tests and probes afterwards (every row must PASS)
       --samples         print the sample queries afterwards
-      --app-user NAME   also create a MySQL login NAME@localhost with the pairadice_player role
-      --web-user NAME   also create a READ-ONLY login NAME@localhost with the pairadice_web_ro role
-                        (for the web app; prompts for a password; needs RBAC)
+      --web-user NAME   also create a login NAME@localhost with the pairadice_web_ro role (anonymous reads)
+      --auth-user NAME  ... with the pairadice_auth role (sign-up, sign-in, sessions)
+      --app-user NAME   ... with the pairadice_player role (signed-in players)
+      --mod-user NAME   ... with the pairadice_moderator role
+      --admin-user NAME ... with the pairadice_admin role (DML + EXECUTE, no DDL)
+                        Login options need RBAC and NAMEs must all differ. Each password is read from
+                        \$PD_WEB_PWD, \$PD_AUTH_PWD, \$PD_APP_PWD, \$PD_MOD_PWD or \$PD_ADMIN_PWD when set,
+                        otherwise prompted for (input hidden). Re-running resets the password.
       --socket-logins OSUSER
                         also create passwordless per-role logins for local development, mapped to
                         the operating-system user OSUSER (auth_socket): pd_web_sock, pd_auth_sock,
@@ -59,7 +67,8 @@ Examples:
   ./database/setup.sh
   ./database/setup.sh --tests --samples
   ./database/setup.sh -u admin -h db.local -P 3307 --no-seed
-  ./database/setup.sh -y --tests --web-user pd_web
+  ./database/setup.sh -y --tests --web-user pd_web --auth-user pd_auth --app-user pd_api \\
+      --mod-user pd_mod --admin-user pd_admin     # passwords from PD_*_PWD env vars or prompts
   ./database/setup.sh -u my_login -S /var/run/mysqld/mysqld.sock -y --tests
 
 Every mysql call runs with --default-character-set=utf8mb4 and time_zone='+00:00': all
@@ -91,6 +100,9 @@ while [[ $# -gt 0 ]]; do
     --samples)       RUN_SAMPLES=1; shift ;;
     --app-user)      APP_USER="${2:?missing value for $1}"; shift 2 ;;
     --web-user)      WEB_USER="${2:?missing value for $1}"; shift 2 ;;
+    --auth-user)     AUTH_USER="${2:?missing value for $1}"; shift 2 ;;
+    --mod-user)      MOD_USER="${2:?missing value for $1}"; shift 2 ;;
+    --admin-user)    ADMIN_USER="${2:?missing value for $1}"; shift 2 ;;
     --socket-logins) SOCKET_LOGINS_FOR="${2:?missing value for $1}"; shift 2 ;;
     --start-server)  START_SERVER=1; shift ;;
     -y|--yes)        ASSUME_YES=1; shift ;;
@@ -99,12 +111,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$APP_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$APP_USER" ]] \
-  || die "--app-user must be 1-32 letters, digits or underscores"
-[[ "$WEB_USER" =~ ^[A-Za-z0-9_]{1,32}$ || -z "$WEB_USER" ]] \
-  || die "--web-user must be 1-32 letters, digits or underscores"
-[[ -z "$APP_USER" || "$APP_USER" != "$WEB_USER" ]] \
-  || die "--app-user and --web-user must be different logins."
+for pair in "app:$APP_USER" "web:$WEB_USER" "auth:$AUTH_USER" "mod:$MOD_USER" "admin:$ADMIN_USER"; do
+  [[ "${pair#*:}" =~ ^[A-Za-z0-9_]{1,32}$ || -z "${pair#*:}" ]] \
+    || die "--${pair%%:*}-user must be 1-32 letters, digits or underscores"
+done
+_named=()
+for n in "$APP_USER" "$WEB_USER" "$AUTH_USER" "$MOD_USER" "$ADMIN_USER"; do
+  [[ -z "$n" ]] && continue
+  for m in ${_named[@]+"${_named[@]}"}; do
+    [[ "$m" != "$n" ]] || die "--app-user, --web-user, --auth-user, --mod-user and --admin-user must all be different logins."
+  done
+  _named+=("$n")
+done
 [[ "$SOCKET_LOGINS_FOR" =~ ^[a-z_][a-z0-9_-]{0,31}$ || -z "$SOCKET_LOGINS_FOR" ]] \
   || die "--socket-logins takes an operating-system user name"
 
@@ -207,21 +225,35 @@ if [[ "$VECTOR" -eq 1 ]]; then
   load 07_vector_outbox.sql "Creating MongoDB sync triggers (07_vector_outbox.sql)"
 fi
 
-# ---------------------------------------------------------------- optional app login
-if [[ -n "$APP_USER" ]]; then
-  [[ "$RBAC" -eq 1 ]] || die "--app-user needs the roles from 04_rbac.sql (remove --no-rbac)."
-  read -r -s -p "Password for new MySQL login '${APP_USER}'@'localhost': " app_pw; echo
-  read -r -s -p "Repeat password: " app_pw2; echo
-  [[ -n "$app_pw" && "$app_pw" == "$app_pw2" ]] || die "passwords are empty or do not match."
-  app_pw_sql="${app_pw//\\/\\\\}"; app_pw_sql="${app_pw_sql//\'/\'\'}"
-  step "Creating login '${APP_USER}'@'localhost' with role pairadice_player"
-  run_mysql <<SQL >/dev/null
-CREATE USER IF NOT EXISTS '${APP_USER}'@'localhost' IDENTIFIED BY '${app_pw_sql}';
-GRANT 'pairadice_player' TO '${APP_USER}'@'localhost';
-SET DEFAULT ROLE 'pairadice_player' TO '${APP_USER}'@'localhost';
+# ---------------------------------------------------------------- optional password logins
+# create_login OPTION NAME ROLE ENVVAR: the password comes from the environment variable when it is set,
+# otherwise from a hidden prompt. It is passed to mysql on stdin only and never echoed.
+create_login() {
+  local opt="$1" name="$2" role="$3" envvar="$4" pw pw2 pw_sql
+  [[ -n "$name" ]] || return 0
+  [[ "$RBAC" -eq 1 ]] || die "--${opt} needs the roles from 04_rbac.sql (remove --no-rbac)."
+  if [[ -n "${!envvar:-}" ]]; then
+    pw="${!envvar}"
+  else
+    read -r -s -p "Password for MySQL login '${name}'@'localhost': " pw; echo
+    read -r -s -p "Repeat password: " pw2; echo
+    [[ "$pw" == "$pw2" ]] || die "passwords do not match."
+  fi
+  [[ -n "$pw" ]] || die "the password for '${name}' is empty."
+  pw_sql="${pw//\\/\\\\}"; pw_sql="${pw_sql//\'/\'\'}"
+  step "Creating login '${name}'@'localhost' with role ${role}"
+  run_mysql <<SQL >/dev/null || die "could not create login ${name} (needs CREATE USER and ROLE_ADMIN)."
+CREATE USER IF NOT EXISTS '${name}'@'localhost' IDENTIFIED BY '${pw_sql}';
+ALTER USER '${name}'@'localhost' IDENTIFIED BY '${pw_sql}';
+GRANT '${role}' TO '${name}'@'localhost';
+SET DEFAULT ROLE '${role}' TO '${name}'@'localhost';
 SQL
-  unset app_pw app_pw2 app_pw_sql
-fi
+}
+create_login app-user   "$APP_USER"   pairadice_player    PD_APP_PWD
+create_login web-user   "$WEB_USER"   pairadice_web_ro    PD_WEB_PWD
+create_login auth-user  "$AUTH_USER"  pairadice_auth      PD_AUTH_PWD
+create_login mod-user   "$MOD_USER"   pairadice_moderator PD_MOD_PWD
+create_login admin-user "$ADMIN_USER" pairadice_admin     PD_ADMIN_PWD
 
 # ---------------------------------------------------------------- optional local socket logins
 # One passwordless login per role, so the web app can connect as a different MySQL user depending on
@@ -239,22 +271,6 @@ SET DEFAULT ROLE '${role}' TO '${login}'@'localhost';
 SQL
     printf '    %-15s -> %s\n' "$login" "$role"
   done
-fi
-
-# ---------------------------------------------------------------- optional read-only web login
-if [[ -n "$WEB_USER" ]]; then
-  [[ "$RBAC" -eq 1 ]] || die "--web-user needs the roles from 04_rbac.sql (remove --no-rbac)."
-  read -r -s -p "Password for new MySQL login '${WEB_USER}'@'localhost': " web_pw; echo
-  read -r -s -p "Repeat password: " web_pw2; echo
-  [[ -n "$web_pw" && "$web_pw" == "$web_pw2" ]] || die "passwords are empty or do not match."
-  web_pw_sql="${web_pw//\\/\\\\}"; web_pw_sql="${web_pw_sql//\'/\'\'}"
-  step "Creating read-only login '${WEB_USER}'@'localhost' with role pairadice_web_ro"
-  run_mysql <<SQL >/dev/null
-CREATE USER IF NOT EXISTS '${WEB_USER}'@'localhost' IDENTIFIED BY '${web_pw_sql}';
-GRANT 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
-SET DEFAULT ROLE 'pairadice_web_ro' TO '${WEB_USER}'@'localhost';
-SQL
-  unset web_pw web_pw2 web_pw_sql
 fi
 
 # ---------------------------------------------------------------- tests
