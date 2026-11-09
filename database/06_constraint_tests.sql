@@ -114,6 +114,17 @@ CALL t_expect_error('PROC: status change by a non-host player', "CALL sp_set_ses
 CALL t_expect_error('PROC: create a session with an empty title', "CALL sp_create_session(4, 1, 1, 1, 12, '   ', NULL, 4, NULL, FALSE, FALSE, 'public', 'auto', NULL, NULL, NULL, 2, 7, NULL, JSON_ARRAY('en'), NULL, @t_sid)");
 CALL t_expect_error('PROC: create a session with no languages',  "CALL sp_create_session(4, 1, 1, 1, 12, 'Valid title', NULL, 4, NULL, FALSE, FALSE, 'public', 'auto', NULL, NULL, NULL, 2, 7, NULL, JSON_ARRAY(), NULL, @t_sid)");
 
+-- Friends and blocks (10_social.sql): each is rejected before it writes anything.
+CALL t_expect_error('SOCIAL: friend request to yourself',        "CALL sp_send_friend_request(1, 1)");
+CALL t_expect_error('SOCIAL: request someone already a friend',  "CALL sp_send_friend_request(1, 8)");
+CALL t_expect_error('SOCIAL: duplicate outgoing request',        "CALL sp_send_friend_request(5, 4)");
+CALL t_expect_error('SOCIAL: request a suspended user',          "CALL sp_send_friend_request(3, 11)");
+CALL t_expect_error('SOCIAL: request across a block',            "CALL sp_send_friend_request(1, 11)");
+CALL t_expect_error('SOCIAL: respond to a request that is not there', "CALL sp_respond_friend_request(1, 3, TRUE)");
+CALL t_expect_error('SOCIAL: remove someone who is not a friend', "CALL sp_remove_friend(1, 3)");
+CALL t_expect_error('SOCIAL: block yourself',                    "CALL sp_block_user(1, 1)");
+CALL t_expect_error('SOCIAL: unblock someone not blocked',       "CALL sp_unblock_user(1, 3)");
+
 SELECT * FROM tmp_test_results;
 SELECT SUM(result = 'PASS') AS passed, COUNT(*) AS total FROM tmp_test_results;
 DROP PROCEDURE t_expect_error;

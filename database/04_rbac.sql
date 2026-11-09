@@ -42,6 +42,13 @@ GRANT EXECUTE ON PROCEDURE pairadice.sp_decline_participant TO 'pairadice_player
 GRANT EXECUTE ON PROCEDURE pairadice.sp_kick_participant TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_set_session_status TO 'pairadice_player';
 GRANT EXECUTE ON PROCEDURE pairadice.sp_my_platform_accounts TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_send_friend_request TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_respond_friend_request TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_cancel_friend_request TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_remove_friend TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_block_user TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_unblock_user TO 'pairadice_player';
+GRANT EXECUTE ON PROCEDURE pairadice.sp_friend_overview TO 'pairadice_player';
 -- hybrid (SQL + vector) recommendations are logged by the API, and outcomes updated as the player acts
 GRANT SELECT, INSERT, UPDATE (outcome) ON pairadice.match_recommendation TO 'pairadice_player';
 
